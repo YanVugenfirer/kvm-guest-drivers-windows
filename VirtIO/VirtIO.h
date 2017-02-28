@@ -3,6 +3,9 @@
 
 #define scatterlist VirtIOBufferDescriptor
 
+#ifndef VIRTIO_DEVICE_DEFINED
+typedef struct TypeVirtIODevice VirtIODevice;
+#endif
 struct VirtIOBufferDescriptor {
     PHYSICAL_ADDRESS physAddr;
     ULONG length;
@@ -59,5 +62,9 @@ BOOLEAN virtqueue_is_interrupt_enabled(struct virtqueue *_vq);
 BOOLEAN virtqueue_has_buf(struct virtqueue *_vq);
 
 void virtqueue_shutdown(struct virtqueue *_vq);
+
+u16 virtqueue_get_last_used_idx(struct virtqueue *_vq);
+
+u16 virtqueue_get_used_idx(struct virtqueue *_vq);
 
 #endif /* _LINUX_VIRTIO_H */

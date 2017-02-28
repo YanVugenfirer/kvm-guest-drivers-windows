@@ -4,6 +4,7 @@
 
 CParaNdisCX::CParaNdisCX()
 {
+    m_ControlData.size = 512;
     m_ControlData.Virtual = nullptr;
 }
 
@@ -20,7 +21,7 @@ bool CParaNdisCX::Create(PPARANDIS_ADAPTER Context, UINT DeviceQueueIndex)
     m_Context = Context;
     m_queueIndex = (u16)DeviceQueueIndex;
 
-    if (!ParaNdis_InitialAllocatePhysicalMemory(m_Context, 512, &m_ControlData))
+    if (!ParaNdis_InitialAllocatePhysicalMemory(m_Context, &m_ControlData))
     {
         DPrintf(0, ("CParaNdisCX::Create - ParaNdis_InitialAllocatePhysicalMemory failed for %u\n",
             DeviceQueueIndex));

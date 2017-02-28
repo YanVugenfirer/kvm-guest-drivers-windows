@@ -13,74 +13,76 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Driver Files">
-      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
-      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    <Filter Include="Hardware">
+      <UniqueIdentifier>{61d43eba-7137-4f7f-8f48-5ffd413904ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OriginalVirtIO">
+      <UniqueIdentifier>{bcae9d6c-7220-46b5-894e-669d8504d7ee}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="precomp.h">
+    <None Include="ReadMe.txt" />
+    <None Include="test.txt" />
+    <None Include="test.log" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="public.h">
+    <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="trace.h">
+    <ClInclude Include="Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="vioinput.h">
+    <ClInclude Include="ConsoleSim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Hid.h">
+    <ClInclude Include="osdep.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="testcommands.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IONetDescriptor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VirtIO_Win.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Hardware\Hardware.h">
+      <Filter>Hardware</Filter>
+    </ClInclude>
+    <ClInclude Include="Hardware\HardwareTypes.h">
+      <Filter>Hardware</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="vioinput.rc">
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ConsoleSim.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="engine.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Hardware\Hardware.c">
+      <Filter>Hardware</Filter>
+    </ClCompile>
+    <ClCompile Include="testCommands.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\VirtIO\VirtIOPCI.c">
+      <Filter>OriginalVirtIO</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\VirtIO\VirtIORing.c">
+      <Filter>OriginalVirtIO</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ConsoleSim.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Device.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Driver.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="IsrDpc.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="utils.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Hid.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Array.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HidMouse.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HidKeyboard.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HidConsumer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="KeyMap.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HidTablet.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HidJoystick.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Inf Include="vioinput.inx">
-      <Filter>Driver Files</Filter>
-    </Inf>
   </ItemGroup>
 </Project>

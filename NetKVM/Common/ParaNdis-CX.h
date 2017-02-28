@@ -12,7 +12,7 @@ public:
 
     virtual NDIS_STATUS SetupMessageIndex(u16 vector);
 
-    BOOLEAN CParaNdisCX::SendControlMessage(
+    BOOLEAN SendControlMessage(
         UCHAR cls,
         UCHAR cmd,
         PVOID buffer1,

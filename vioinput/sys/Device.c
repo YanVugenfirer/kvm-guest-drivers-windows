@@ -92,7 +92,7 @@ VIOInputEvtDeviceAdd(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, DBG_PNP, "--> %s\n", __FUNCTION__);
 
-    // This driver acts like a lower filter under viohidkmdf.sys
+    // This driver acts like a lower filter under MsHidKmdf.sys
     WdfFdoInitSetFilter(DeviceInit);
 
     WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&PnpPowerCallbacks);
@@ -104,6 +104,7 @@ VIOInputEvtDeviceAdd(
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attributes, INPUT_DEVICE);
     Attributes.SynchronizationScope = WdfSynchronizationScopeDevice;
+    Attributes.ExecutionLevel = WdfExecutionLevelPassive;
     status = WdfDeviceCreate(&DeviceInit, &Attributes, &hDevice);
     if (!NT_SUCCESS(status))
     {

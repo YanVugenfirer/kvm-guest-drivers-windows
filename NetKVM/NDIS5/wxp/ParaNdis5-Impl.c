@@ -198,8 +198,10 @@ Parameters:
     tCompletePhysicalAddress *pAddresses
             the structure accumulates all our knowledge
             about the allocation (size, addresses, cacheability etc)
-            filled by ParaNdis_InitialAllocatePhysicalMemory
+            filled by ParaNdis_InitialAllocatePhysicalMemory or
+            by ParaNdis_RuntimeRequestToAllocatePhysicalMemory
 ***********************************************************/
+
 VOID ParaNdis_FreePhysicalMemory(
     PARANDIS_ADAPTER *pContext,
     tCompletePhysicalAddress *pAddresses)
@@ -589,7 +591,7 @@ static void CompletePacket(PARANDIS_ADAPTER *pContext, PNDIS_PACKET Packet)
 Copy data from specified packet to VirtIO buffer, minimum 60 bytes
 Parameters:
     PNDIS_PACKET Packet     packet to copy data from
-    PVOID dest              destination to copy
+    PVOID dest              desctination to copy
     ULONG maxSize           maximal size of destination
 Return value:
     size = number of bytes copied
@@ -897,7 +899,7 @@ static void InitializeTransferParameters(tTxOperationParameters *pParams, tSendE
     NdisQueryPacket(pEntry->packet, &pParams->nofSGFragments, NULL, NULL, &pParams->ulDataSize);
     pParams->ReferenceValue = pEntry;
     pParams->packet = pEntry->packet;
-    pParams->offloadMss = (pEntry->flags & SEND_ENTRY_TSO_USED) ? pEntry->ipTransferUnit : 0;
+    pParams->offloalMss = (pEntry->flags & SEND_ENTRY_TSO_USED) ? pEntry->ipTransferUnit : 0;
     // on NDIS5 it is unknown
     pParams->tcpHeaderOffset = 0;
     // fills only if SGList present in the packet

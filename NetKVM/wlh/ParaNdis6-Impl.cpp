@@ -86,22 +86,17 @@ Return value:
 ***********************************************************/
 BOOLEAN ParaNdis_InitialAllocatePhysicalMemory(
     PARANDIS_ADAPTER *pContext,
-    ULONG ulSize,
     tCompletePhysicalAddress *pAddresses)
 {
     NdisMAllocateSharedMemory(
         pContext->MiniportHandle,
-        ulSize,
+        pAddresses->size,
         TRUE,
         &pAddresses->Virtual,
         &pAddresses->Physical);
-    if (pAddresses->Virtual != NULL)
-    {
-        pAddresses->size = ulSize;
-        return TRUE;
-    }
-    return FALSE;
+    return pAddresses->Virtual != NULL;
 }
+
 
 /**********************************************************
 NDIS6 implementation of shared memory freeing
@@ -110,12 +105,15 @@ Parameters:
     tCompletePhysicalAddress *pAddresses
             the structure accumulates all our knowledge
             about the allocation (size, addresses, cacheability etc)
-            filled by ParaNdis_InitialAllocatePhysicalMemory
+            filled by ParaNdis_InitialAllocatePhysicalMemory or
+            by ParaNdis_RuntimeRequestToAllocatePhysicalMemory
 ***********************************************************/
+
 VOID ParaNdis_FreePhysicalMemory(
     PARANDIS_ADAPTER *pContext,
     tCompletePhysicalAddress *pAddresses)
 {
+
     NdisMFreeSharedMemory(
         pContext->MiniportHandle,
         pAddresses->size,
@@ -215,7 +213,7 @@ static BOOLEAN MiniportInterrupt(
         return FALSE;
     }
 
-    PARANDIS_STORE_LAST_INTERRUPT_TIMESTAMP(pContext);
+    PARADNIS_STORE_LAST_INTERRUPT_TIMESTAMP(pContext);
 
     if(!pContext->bDeviceInitialized) {
         *QueueDefaultInterruptDpc = FALSE;
@@ -279,7 +277,7 @@ static BOOLEAN MiniportMSIInterrupt(
 {
     PARANDIS_ADAPTER *pContext = (PARANDIS_ADAPTER *)MiniportInterruptContext;
 
-    PARANDIS_STORE_LAST_INTERRUPT_TIMESTAMP(pContext);
+    PARADNIS_STORE_LAST_INTERRUPT_TIMESTAMP(pContext);
 
     *TargetProcessors = 0;
 
@@ -487,7 +485,7 @@ NDIS_STATUS ParaNdis_ConfigureMSIXVectors(PARANDIS_ADAPTER *pContext)
         }
         for (UINT j = 0; j < pContext->nPathBundles && status == NDIS_STATUS_SUCCESS; ++j)
         {
-            u16 vector = 2 * u16(j);
+            u16 vector = 2 * (u16)j;
             status = pContext->pPathBundles[j].txPath.SetupMessageIndex(vector);
             if (status == NDIS_STATUS_SUCCESS)
             {
@@ -512,7 +510,7 @@ NDIS_STATUS ParaNdis_ConfigureMSIXVectors(PARANDIS_ADAPTER *pContext)
             }
             else
             {
-                status = pContext->CXPath.SetupMessageIndex(2 * u16(pContext->nPathBundles));
+                status = pContext->CXPath.SetupMessageIndex(2 * (u16)pContext->nPathBundles);
             }
         }
     }
@@ -700,12 +698,9 @@ BOOLEAN ParaNdis_BindRxBufferToPacket(
     ULONG i;
     PMDL *NextMdlLinkage = &p->Holder;
 
-    for(i = PARANDIS_FIRST_RX_DATA_PAGE; i < p->BufferSGLength; i++)
+    for(i = PARANDIS_FIRST_RX_DATA_PAGE; i < p->PagesAllocated; i++)
     {
-        *NextMdlLinkage = NdisAllocateMdl(
-            pContext->MiniportHandle,
-            p->PhysicalPages[i].Virtual,
-            p->PhysicalPages[i].size);
+        *NextMdlLinkage = NdisAllocateMdl(pContext->MiniportHandle, p->PhysicalPages[i].Virtual, PAGE_SIZE);
         if(*NextMdlLinkage == NULL) goto error_exit;
 
         NextMdlLinkage = &(NDIS_MDL_LINKAGE(*NextMdlLinkage));
@@ -724,16 +719,14 @@ void ParaNdis_UnbindRxBufferFromPacket(
     pRxNetDescriptor p)
 {
     PMDL NextMdlLinkage = p->Holder;
-    ULONG ulPageDescIndex = PARANDIS_FIRST_RX_DATA_PAGE;
 
     while(NextMdlLinkage != NULL)
     {
         PMDL pThisMDL = NextMdlLinkage;
         NextMdlLinkage = NDIS_MDL_LINKAGE(pThisMDL);
 
-        NdisAdjustMdlLength(pThisMDL, p->PhysicalPages[ulPageDescIndex].size);
+        NdisAdjustMdlLength(pThisMDL, PAGE_SIZE);
         NdisFreeMdl(pThisMDL);
-        ulPageDescIndex++;
     }
 }
 
@@ -744,15 +737,13 @@ void ParaNdis_AdjustRxBufferHolderLength(
 {
     PMDL NextMdlLinkage = p->Holder;
     ULONG ulBytesLeft = p->PacketInfo.dataLength + ulDataOffset;
-    ULONG ulPageDescIndex = PARANDIS_FIRST_RX_DATA_PAGE;
 
     while(NextMdlLinkage != NULL)
     {
-        ULONG ulThisMdlBytes = min(p->PhysicalPages[ulPageDescIndex].size, ulBytesLeft);
+        ULONG ulThisMdlBytes = min(PAGE_SIZE, ulBytesLeft);
         NdisAdjustMdlLength(NextMdlLinkage, ulThisMdlBytes);
         ulBytesLeft -= ulThisMdlBytes;
         NextMdlLinkage = NDIS_MDL_LINKAGE(NextMdlLinkage);
-        ulPageDescIndex++;
     }
     NETKVM_ASSERT(ulBytesLeft == 0);
 }
@@ -877,15 +868,11 @@ tPacketIndicationType ParaNdis_PrepareReceivedPacket(
             {
                 *pnCoalescedSegmentsCount = PktGetTCPCoalescedSegmentsCount(pPacketInfo, pContext->MaxPacketSize.nMaxDataSize);
                 NBLSetRSCInfo(pContext, pNBL, pPacketInfo, *pnCoalescedSegmentsCount, 0);
-                DPrintf(1, ("RSC host packet, datalen %d, GSO type %d\n", pPacketInfo->dataLength, pHeader->hdr.gso_type));
-                pContext->extraStatistics.framesCoalescedHost++;
             }
             else if ((pContext->RSC.bIPv4SupportedQEMU || pContext->RSC.bIPv6SupportedQEMU) && (pHeader->hdr.gso_type != VIRTIO_NET_HDR_RSC_NONE))
             {
                 *pnCoalescedSegmentsCount = pHeader->rsc_pkts;
                 NBLSetRSCInfo(pContext, pNBL, pPacketInfo, *pnCoalescedSegmentsCount, pHeader->rsc_dup_acks);
-                DPrintf(1, ("RSC win packet, datalen %d, GSO type %d\n", pPacketInfo->dataLength, pHeader->hdr.gso_type));
-                pContext->extraStatistics.framesCoalescedWindows++;
             }
             else
 #endif

@@ -679,14 +679,14 @@ static void SetupInterrruptAffinity(PIO_RESOURCE_REQUIREMENTS_LIST prrl)
                 {
                     desc->Flags |= CM_RESOURCE_INTERRUPT_POLICY_INCLUDED;
                     desc->u.Interrupt.Group = procNumber.Group;
-                    desc->u.Interrupt.TargetedProcessors = 1i64 << procNumber.Number;
+                    desc->u.Interrupt.TargetedProcessors = 1ll << procNumber.Number;
                 }
                 else
                 {
                     DPrintf(0, ("[%s] - can't convert index %u into processor number\n", __FUNCTION__, procIndex));
                 }
 #else
-                desc->u.Interrupt.TargetedProcessors = 1i64 << procIndex;
+                desc->u.Interrupt.TargetedProcessors = 1ll << procIndex;
 #endif
                 if (jx % 2 == 1)
                 {
@@ -972,7 +972,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath
 #ifdef DEBUG_TIMING
     LARGE_INTEGER TickCount;
     LARGE_INTEGER SysTime;
-#endif DEBUG_TIMING
+#endif //DEBUG_TIMING
 
     ParaNdis_DebugInitialize();
 

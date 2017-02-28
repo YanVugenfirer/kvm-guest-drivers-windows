@@ -35,7 +35,6 @@
         WPP_DEFINE_BIT(DBG_ALL)         \
         WPP_DEFINE_BIT(DBG_INIT)        \
         WPP_DEFINE_BIT(DBG_POWER)       \
-        WPP_DEFINE_BIT(DBG_IOCTLS)      \
     )
 
 #define WPP_FLAG_LEVEL_LOGGER(flag, level) \

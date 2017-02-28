@@ -19,7 +19,7 @@
 typedef struct _tagIPv6ExtHeader {
     UCHAR       ip6ext_next_header;     // next header type
     UCHAR       ip6ext_hdr_len;         // length of this header in 8 bytes unit, not including first 8 bytes
-    USHORT      options;                // 
+    USHORT      options;                //
 } IPv6ExtHeader;
 
 // IP Pseudo Header RFC 768
@@ -85,50 +85,25 @@ typedef struct _tagIP6_TYPE2_ROUTING_HEADER
 #define IP6_HDR_ESP               (50)
 #define IP6_HDR_AUTHENTICATION    (51)
 #define IP6_HDR_NONE              (59)
-#define IP6_HDR_DESTINATION       (60)
+#define IP6_HDR_DESTINATON        (60)
 #define IP6_HDR_MOBILITY          (135)
 
 #define IP6_EXT_HDR_GRANULARITY   (8)
 
-static UINT_PTR RawCheckSumCalculator(PVOID buffer, ULONG len)
+static UINT32 RawCheckSumCalculator(PVOID buffer, ULONG len)
 {
-    UINT_PTR val = 0;
-    PUCHAR ptr = (PUCHAR)buffer;
-#ifdef _WIN64
-    ULONG count = len >> 2;
-    while (count--) {
-        val += *(PUINT32)ptr;
-        ptr += 4;
-    }
-    if (len & 2) {
-        val += *(PUINT16)ptr;
-        ptr += 2;
-    }
-#else
+    UINT32 val = 0;
+    PUSHORT pus = (PUSHORT)buffer;
     ULONG count = len >> 1;
-    while (count--) {
-        val += *(PUINT16)ptr;
-        ptr += 2;
-    }
-#endif
-    if (len & 1) {
-        val += *ptr;
-    }
+    while (count--) val += *pus++;
+    if (len & 1) val += (USHORT)*(PUCHAR)pus;
     return val;
 }
 
-static __inline USHORT RawCheckSumFinalize(UINT_PTR sum)
+static __inline USHORT RawCheckSumFinalize(UINT32 val)
 {
-    UINT32 sum32;
-    UINT16 sum16;
-
-#ifdef _WIN64
-    sum32 = (((sum >> 32) | (sum << 32)) + sum) >> 32;
-#else
-    sum32 = sum;
-#endif
-    sum16 = (((sum32 >> 16) | (sum32 << 16)) + sum32) >> 16;
-    return ~sum16;
+    val = (((val >> 16) | (val << 16)) + val) >> 16;
+    return (USHORT)~val;
 }
 
 static __inline USHORT CheckSumCalculatorFlat(PVOID buffer, ULONG len)
@@ -140,7 +115,7 @@ static __inline USHORT CheckSumCalculator(tCompletePhysicalAddress *pDataPages, 
 {
     tCompletePhysicalAddress *pCurrentPage = &pDataPages[0];
     ULONG ulCurrPageOffset = 0;
-    UINT_PTR uRawCSum = 0;
+    UINT32 u32RawCSum = 0;
 
     while(ulStartOffset > 0)
     {
@@ -157,13 +132,13 @@ static __inline USHORT CheckSumCalculator(tCompletePhysicalAddress *pDataPages, 
         PVOID pCurrentPageDataStart = RtlOffsetToPointer(pCurrentPage->Virtual, ulCurrPageOffset);
         ULONG ulCurrentPageDataLength = min(len, pCurrentPage->size - ulCurrPageOffset);
 
-        uRawCSum += RawCheckSumCalculator(pCurrentPageDataStart, ulCurrentPageDataLength);
+        u32RawCSum += RawCheckSumCalculator(pCurrentPageDataStart, ulCurrentPageDataLength);
         pCurrentPage++;
         ulCurrPageOffset = 0;
         len -= ulCurrentPageDataLength;
     }
 
-    return RawCheckSumFinalize(uRawCSum);
+    return RawCheckSumFinalize(u32RawCSum);
 }
 
 
@@ -917,7 +892,7 @@ BOOLEAN AnalyzeIP6Hdr(
             __fallthrough;
         case IP6_HDR_FRAGMENT:
             return TRUE;
-        case IP6_HDR_DESTINATION:
+        case IP6_HDR_DESTINATON:
             {
                 IPV6_ADDRESS *homeAddr = NULL;
                 ULONG destHdrOffset = *ip6HdrLength;

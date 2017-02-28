@@ -139,7 +139,7 @@ private:
 typedef CLockedContext<CNdisSpinLock> TSpinLocker;
 
 LONG FORCEINLINE NetKvmInterlockedAdd(
-    __inout __drv_interlocked LONG volatile *p,
+    __inout __drv_interlocked PLONG VOLATILE p,
     __in LONG Val
 )
 {
@@ -286,16 +286,16 @@ public:
     {
         CLockedContext<TAccessStrategy> LockedContext(*this);
         InsertHeadList(&m_List, Entry->GetListEntry());
-        CounterIncrement();
-        return GetCount();
+        TCountingStrategy::CounterIncrement();
+        return TCountingStrategy::GetCount();
     }
 
     ULONG PushBack(TEntryType *Entry)
     {
         CLockedContext<TAccessStrategy> LockedContext(*this);
         InsertTailList(&m_List, Entry->GetListEntry());
-        CounterIncrement();
-        return GetCount();
+        TCountingStrategy::CounterIncrement();
+        return TCountingStrategy::GetCount();
     }
 
     void Remove(TEntryType *Entry)
@@ -353,14 +353,14 @@ private:
         {
             return nullptr;
         }
-        CounterDecrement();
+        TCountingStrategy::CounterDecrement();
         return TEntryType::GetByListEntry(RemoveHeadList(&m_List));
     }
 
     void Remove_LockLess(PLIST_ENTRY Entry)
     {
         RemoveEntryList(Entry);
-        CounterDecrement();
+        TCountingStrategy::CounterDecrement();
     }
 
     LIST_ENTRY m_List;
@@ -396,18 +396,18 @@ public:
     CPool() {}
     TEntryType *Allocate() override
     {
-        auto *p = Pop();
+        auto *p = this->Pop();
         if (!p) p = NdisAllocate();
         return p;
     }
     void Deallocate(TEntryType *ptr) override
     {
-        PushBack(ptr);
+        this->PushBack(ptr);
     }
     void Create(NDIS_HANDLE h) { m_Handle = h; }
     ~CPool()
     {
-        ForEachDetached([this](TEntryType *p) { NdisFree(p); });
+        this->ForEachDetached([this](TEntryType *p) { NdisFree(p); });
     }
 private:
     NDIS_HANDLE m_Handle = nullptr;
@@ -480,7 +480,7 @@ bool __inline ParaNdis_IsPassive()
 #define RW_LOCK_62
 #elif NDIS_SUPPORT_NDIS6
 #define RW_LOCK_60
-#elif
+#else
 #error  Read/Write lock not supported by NDIS before 6.0
 #endif
 
@@ -500,7 +500,7 @@ class CNdisRWLock : public CPlacementAllocatable
 {
 public:
 #ifdef RW_LOCK_60
-    bool Create(NDIS_HANDLE) 
+    bool Create(NDIS_HANDLE)
     {
         NdisInitializeReadWriteLock(&m_lock);
         return true;
@@ -511,7 +511,7 @@ public:
     bool Create(NDIS_HANDLE miniportHandle);
 #endif
 
-    ~CNdisRWLock() 
+    ~CNdisRWLock()
     {
 #ifdef RW_LOCK_62
         if (m_pLock != nullptr)
@@ -606,7 +606,7 @@ public:
         (lock.*Acquire)(lockState);
     }
 
-    ~CNdisAutoRWLock() 
+    ~CNdisAutoRWLock()
     {
         (lock.*Release)(lockState);
     }
@@ -627,17 +627,6 @@ typedef CNdisAutoRWLock<&CNdisRWLock::acquireWriteDpr, &CNdisRWLock::releaseDpr>
 ULONG ParaNdis_GetIndexFromAffinity(KAFFINITY affinity);
 
 ULONG ParaNdis_GetSystemCPUCount();
-
-// returns system-wide CPU index in multi-group environment
-// returns regular CPU number in single-group environment
-ULONG FORCEINLINE ParaNdis_GetCurrentCPUIndex()
-{
-#if NDIS_SUPPORT_NDIS620
-    return KeGetCurrentProcessorNumberEx(NULL);
-#else
-    return KeGetCurrentProcessorNumber();
-#endif
-}
 
 template <size_t PrintWidth, size_t ColumnWidth, typename TTable, typename... AccessorsFuncs>
 void ParaNdis_PrintTable(int DebugPrintLevel, TTable table, size_t Size, LPCSTR Format, AccessorsFuncs... Accessors)
@@ -681,7 +670,7 @@ void ParaNdis_PrintCharArray(int DebugPrintLevel, const CCHAR *data, size_t leng
 static inline
 ULONG ParaNdis_CountNBLs(PNET_BUFFER_LIST NBL)
 {
-	ULONG Result;
+    ULONG Result;
     for (Result = 0UL; NBL != nullptr;
         NBL = NET_BUFFER_LIST_NEXT_NBL(NBL), Result++);
 

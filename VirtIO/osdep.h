@@ -29,9 +29,9 @@
 #define unlikely(x) x
 
 #define ENOSPC 1
-#define BUG_ON(a) ASSERT(!(a))
+#define BUG_ON(a) NT_ASSERT(!(a))
 #define WARN_ON(a)
-#define BUG() ASSERT(0)
+#define BUG() NT_ASSERT(0)
 
 #if !defined(__cplusplus) && !defined(bool)
 // Important note: in MSFT C++ bool length is 1 bytes
@@ -41,8 +41,11 @@
 #define false FALSE
 #define true TRUE
 #endif
+#endif
 
+#ifndef INLINE_DEFINED
 #define inline __forceinline
+#endif
 
 #ifdef DBG
 #define DEBUG
@@ -54,5 +57,4 @@
 
 #define SMP_CACHE_BYTES 64
 
-#endif
 #endif

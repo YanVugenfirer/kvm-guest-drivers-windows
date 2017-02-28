@@ -11,5 +11,3 @@
 **********************************************************************/
 
 #include <quverp.h>
-
-NdisMofResource MOFDATA mof\netkvm.bmf
