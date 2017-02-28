@@ -15,17 +15,17 @@
 
 
 #include <ntddk.h>
+#ifdef USE_STORPORT
+#define STOR_USE_SCSI_ALIASES
 #include <storport.h>
+#else
+#include <scsi.h>
+#endif
 #include <stdarg.h>
 #include "kdebugprint.h"
 #include "evntrace.h"
 
-//#define DBG 1
-//#define COM_DEBUG 1
-
 #define CHECKBIT(value, nbit) virtio_is_feature_enabled(value, nbit)
-#define CHECKFLAG(value, flag) ((value & (flag)) == flag)
-#define SETFLAG(value, flag) (value |= (flag))
 
 #define CACHE_LINE_SIZE 64
 #define ROUND_TO_CACHE_LINES(Size)  (((ULONG_PTR)(Size) + CACHE_LINE_SIZE - 1) & ~(CACHE_LINE_SIZE - 1))

@@ -21,7 +21,7 @@
 
 #pragma warning (push)
 #pragma warning (disable:6102)
-#include <Ntstrsafe.h>
+#include <ntstrsafe.h>
 #pragma warning (pop)
 
 #if NTDDI_VERSION <= NTDDI_VISTASP1
@@ -40,6 +40,10 @@
 
 #ifndef max
 #define max(_a, _b) (((_a) > (_b)) ? (_a) : (_b))
+#endif
+
+#ifndef VOLATILE
+#define VOLATILE volatile
 #endif
 
 #ifndef PARANDIS_MAJOR_DRIVER_VERSION

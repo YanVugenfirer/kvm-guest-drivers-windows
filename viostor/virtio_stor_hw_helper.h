@@ -18,7 +18,12 @@
 
 #include <ntddk.h>
 
+#ifdef USE_STORPORT
+#define STOR_USE_SCSI_ALIASES
 #include <storport.h>
+#else
+#include <scsi.h>
+#endif
 
 #include "osdep.h"
 #include "virtio_pci.h"
@@ -108,8 +113,7 @@ BOOLEAN
 RhelDoFlush(
     IN PVOID DeviceExtension,
     IN PSRB_TYPE Srb,
-    IN BOOLEAN resend,
-    BOOLEAN bIsr
+    IN BOOLEAN sync
     );
 
 VOID
@@ -131,35 +135,6 @@ RhelGetSerialNumber(
 VOID
 RhelGetDiskGeometry(
     IN PVOID DeviceExtension
-    );
-
-VOID
-VioStorCompleteRequest(
-    IN PVOID DeviceExtension,
-    IN ULONG MessageID,
-    IN BOOLEAN bIsr
-    );
-
-PVOID
-VioStorPoolAlloc(
-    IN PVOID DeviceExtension,
-    IN SIZE_T size
-    );
-
-VOID
-VioStorVQLock(
-    IN PVOID DeviceExtension,
-    IN ULONG MessageID,
-    IN OUT PSTOR_LOCK_HANDLE LockHandle,
-    IN BOOLEAN isr
-    );
-
-VOID
-VioStorVQUnlock(
-    IN PVOID DeviceExtension,
-    IN ULONG MessageID,
-    IN PSTOR_LOCK_HANDLE LockHandle,
-    IN BOOLEAN isr
     );
 
 extern VirtIOSystemOps VioStorSystemOps;

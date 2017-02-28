@@ -15,7 +15,6 @@
 #include "ParaNdis6.h"
 #include "kdebugprint.h"
 #include "ParaNdis_DebugHistory.h"
-#include "netkvmmof.h"
 
 static NDIS_IO_WORKITEM_FUNCTION OnSetPowerWorkItem;
 
@@ -44,11 +43,6 @@ static NDIS_STATUS OnSetInterruptModeration(PARANDIS_ADAPTER *pContext, tOidDesc
 static NDIS_STATUS OnSetOffloadParameters(PARANDIS_ADAPTER *pContext, tOidDesc *pOid);
 static NDIS_STATUS OnSetOffloadEncapsulation(PARANDIS_ADAPTER *pContext, tOidDesc *pOid);
 static NDIS_STATUS OnSetLinkParameters(PARANDIS_ADAPTER *pContext, tOidDesc *pOid);
-static NDIS_STATUS OnSetVendorSpecific1(PARANDIS_ADAPTER *pContext, tOidDesc *pOid);
-static NDIS_STATUS OnSetVendorSpecific2(PARANDIS_ADAPTER *pContext, tOidDesc *pOid);
-
-#define OID_VENDOR_1                    0xff010201
-#define OID_VENDOR_2                    0xff010202
 
 #if PARANDIS_SUPPORT_RSS
 
@@ -131,7 +125,7 @@ OIDENTRY(OID_GEN_PROTOCOL_OPTIONS,              2,0,4, 0                ),
 OIDENTRY(OID_GEN_MAC_OPTIONS,                   2,0,4, ohfQuery         ),
 OIDENTRY(OID_GEN_MAXIMUM_SEND_PACKETS,          2,0,4, ohfQueryStat     ),
 OIDENTRY(OID_GEN_VENDOR_DRIVER_VERSION,         2,0,4, ohfQueryStat     ),
-OIDENTRY(OID_GEN_SUPPORTED_GUIDS,               2,4,4, ohfQueryStat     ),
+OIDENTRY(OID_GEN_SUPPORTED_GUIDS,               2,4,4, 0                ),
 OIDENTRY(OID_GEN_TRANSPORT_HEADER_OFFSET,       2,4,4, 0                ),
 OIDENTRY(OID_GEN_MEDIA_CAPABILITIES,            2,4,4, 0                ),
 OIDENTRY(OID_GEN_PHYSICAL_MEDIUM,               2,4,4, 0                ),
@@ -192,8 +186,6 @@ OIDENTRY(OID_IP4_OFFLOAD_STATS,                 4,4,4, 0),
 OIDENTRY(OID_IP6_OFFLOAD_STATS,                 4,4,4, 0),
 OIDENTRYPROC(OID_TCP_OFFLOAD_PARAMETERS,        0,0,0, ohfSet | ohfSetMoreOK | ohfSetLessOK, OnSetOffloadParameters),
 OIDENTRYPROC(OID_OFFLOAD_ENCAPSULATION,         0,0,0, ohfQuerySet, OnSetOffloadEncapsulation),
-OIDENTRYPROC(OID_VENDOR_1,                      0,0,0, ohfQueryStat | ohfSet | ohfSetMoreOK, OnSetVendorSpecific1),
-OIDENTRYPROC(OID_VENDOR_2,                      0,0,0, ohfQueryStat | ohfSet | ohfSetMoreOK, OnSetVendorSpecific2),
 
 #if PARANDIS_SUPPORT_RSS
     OIDENTRYPROC(OID_GEN_RECEIVE_SCALE_PARAMETERS,  0,0,0, ohfSet | ohfSetMoreOK, RSSSetParameters),
@@ -262,9 +254,6 @@ static NDIS_OID SupportedOids[] =
         OID_GEN_XMIT_OK,
         OID_GEN_RCV_OK,
         OID_GEN_VLAN_ID,
-        OID_GEN_SUPPORTED_GUIDS,
-        OID_VENDOR_1,
-        OID_VENDOR_2,
         OID_OFFLOAD_ENCAPSULATION,
         OID_TCP_OFFLOAD_PARAMETERS,
 #if PARANDIS_SUPPORT_RSS
@@ -276,11 +265,6 @@ static NDIS_OID SupportedOids[] =
 #endif
 };
 
-static const NDIS_GUID supportedGUIDs[]
-{
-    { NetKvm_LoggingGuid,    OID_VENDOR_1, NetKvm_Logging_SIZE, fNDIS_GUID_TO_OID | fNDIS_GUID_ALLOW_READ | fNDIS_GUID_ALLOW_WRITE },
-    { NetKvm_StatisticsGuid, OID_VENDOR_2, NetKvm_Statistics_SIZE, fNDIS_GUID_TO_OID | fNDIS_GUID_ALLOW_READ | fNDIS_GUID_ALLOW_WRITE }
-};
 
 /**********************************************************
         For statistics header
@@ -368,26 +352,6 @@ void ParaNdis6_GetSupportedOid(NDIS_MINIPORT_ADAPTER_GENERAL_ATTRIBUTES *pGenAtt
     pGenAttributes->SupportedStatistics = SupportedStatistics;
 }
 
-// WMI properties (set operation)
-static NDIS_STATUS OnSetVendorSpecific1(PARANDIS_ADAPTER *pContext, tOidDesc *pOid)
-{
-    NDIS_STATUS status = STATUS_SUCCESS;
-    UNREFERENCED_PARAMETER(pContext);
-    status = ParaNdis_OidSetCopy(pOid, &virtioDebugLevel, sizeof(virtioDebugLevel));
-    DPrintf(0, ("DebugLevel => %d\n", virtioDebugLevel));
-    return status;
-}
-
-static NDIS_STATUS OnSetVendorSpecific2(PARANDIS_ADAPTER *pContext, tOidDesc *pOid)
-{
-    ULONG dummy = 0;
-    NDIS_STATUS status;
-    UNREFERENCED_PARAMETER(pContext);
-    status = ParaNdis_OidSetCopy(pOid, &dummy, sizeof(dummy));
-    RtlZeroMemory(&pContext->extraStatistics, sizeof(pContext->extraStatistics));
-    return status;
-}
-
 /*****************************************************************
 Handles NDIS6 specific OID, all the rest handled by common handler
 *****************************************************************/
@@ -410,9 +374,8 @@ static NDIS_STATUS ParaNdis_OidQuery(PARANDIS_ADAPTER *pContext, tOidDesc *pOid)
     ULONG ulSize = 0;
     BOOLEAN bFreeInfo = FALSE;
     LONGLONG ul64LinkSpeed = 0;
-    NetKvm_Statistics wmiStatistics;
 
-#define SETINFO(field, value) pInfo = &u.##field; ulSize = sizeof(u.##field); u.##field = (value)
+#define SETINFO(field, value) pInfo = &u.field; ulSize = sizeof(u.field); u.field = (value)
     switch(pOid->Oid)
     {
         case OID_GEN_LINK_SPEED:
@@ -436,25 +399,6 @@ static NDIS_STATUS ParaNdis_OidQuery(PARANDIS_ADAPTER *pContext, tOidDesc *pOid)
             pInfo  = &pContext->Statistics;
             ulSize = sizeof(pContext->Statistics);
             break;
-        case OID_GEN_SUPPORTED_GUIDS:
-            pInfo = (PVOID)&supportedGUIDs;
-            ulSize = sizeof(supportedGUIDs);
-            break;
-        case OID_VENDOR_1:
-            pInfo = &virtioDebugLevel;
-            ulSize = sizeof(virtioDebugLevel);
-            break;
-        case OID_VENDOR_2:
-            pInfo = &wmiStatistics;
-            ulSize = sizeof(wmiStatistics);
-            wmiStatistics.txChecksumOffload = pContext->extraStatistics.framesCSOffload;
-            wmiStatistics.txLargeOffload = pContext->extraStatistics.framesLSO;
-            wmiStatistics.rxPriority = pContext->extraStatistics.framesRxPriority;
-            wmiStatistics.rxChecksumOK = pContext->extraStatistics.framesRxCSHwOK;
-            wmiStatistics.rxCoalescedWin = pContext->extraStatistics.framesCoalescedWindows;
-            wmiStatistics.rxCoalescedHost = pContext->extraStatistics.framesCoalescedHost;
-            break;
-
         case OID_GEN_INTERRUPT_MODERATION:
             u.InterruptModeration.Header.Type = NDIS_OBJECT_TYPE_DEFAULT;
             u.InterruptModeration.Header.Size = sizeof(u.InterruptModeration);
@@ -718,7 +662,7 @@ static void FillOffloadStructure(NDIS_OFFLOAD *po, tOffloadSettingsFlags f)
     pcso->IPv4Transmit.TcpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fTxTCPChecksum);
     pcso->IPv4Transmit.TcpOptionsSupported = OFFLOAD_FEATURE_SUPPORT(f.fTxTCPOptions);
     pcso->IPv4Transmit.UdpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fTxUDPChecksum);
-    
+
     pcso->IPv6Transmit.Encapsulation = NDIS_ENCAPSULATION_IEEE_802_3;
     pcso->IPv6Transmit.IpExtensionHeadersSupported = OFFLOAD_FEATURE_SUPPORT(f.fTxIPv6Ext);
     pcso->IPv6Transmit.TcpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fTxTCPv6Checksum);
@@ -731,7 +675,7 @@ static void FillOffloadStructure(NDIS_OFFLOAD *po, tOffloadSettingsFlags f)
     pcso->IPv4Receive.TcpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fRxTCPChecksum);
     pcso->IPv4Receive.TcpOptionsSupported = OFFLOAD_FEATURE_SUPPORT(f.fRxTCPOptions);
     pcso->IPv4Receive.UdpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fRxUDPChecksum);
-    
+
     pcso->IPv6Receive.Encapsulation = NDIS_ENCAPSULATION_IEEE_802_3;
     pcso->IPv6Receive.IpExtensionHeadersSupported = OFFLOAD_FEATURE_SUPPORT(f.fRxIPv6Ext);
     pcso->IPv6Receive.TcpChecksum = OFFLOAD_FEATURE_SUPPORT(f.fRxTCPv6Checksum);
@@ -746,7 +690,7 @@ static void FillOffloadStructure(NDIS_OFFLOAD *po, tOffloadSettingsFlags f)
     plso2->IPv4.Encapsulation = plso->IPv4.Encapsulation;
     plso2->IPv4.MaxOffLoadSize = plso->IPv4.MaxOffLoadSize;
     plso2->IPv4.MinSegmentCount = plso->IPv4.MinSegmentCount;
-    
+
     plso2->IPv6.Encapsulation = f.fTxLsov6 ? NDIS_ENCAPSULATION_IEEE_802_3 : NDIS_ENCAPSULATION_NOT_SUPPORTED;
     plso2->IPv6.IpExtensionHeadersSupported = f.fTxLsov6IP ? NDIS_OFFLOAD_SUPPORTED : NDIS_OFFLOAD_NOT_SUPPORTED;
     plso2->IPv6.MaxOffLoadSize = f.fTxLsov6 ? PARANDIS_MAX_LSO_SIZE : 0;
@@ -822,7 +766,7 @@ static void BuildOffloadStatusReport(
 {
     // see
 #if 1
-#define SYNC_STRUCT(_struct, field) update->##_struct.##field = (Current->##_struct.##field == NDIS_OFFLOAD_SUPPORTED) ? NDIS_OFFLOAD_SET_ON : NDIS_OFFLOAD_SET_OFF
+#define SYNC_STRUCT(_struct, field) update->_struct.field = (Current->_struct.field == NDIS_OFFLOAD_SUPPORTED) ? NDIS_OFFLOAD_SET_ON : NDIS_OFFLOAD_SET_OFF
 #define SYNC_FIELD_TX4(field) SYNC_STRUCT(IPv4Transmit,field)
 #define SYNC_FIELD_RX4(field) SYNC_STRUCT(IPv4Receive,field)
 #define SYNC_FIELD_TX6(field) SYNC_STRUCT(IPv6Transmit,field)
@@ -1088,15 +1032,19 @@ NDIS_STATUS OnSetRSCParameters(PPARANDIS_ADAPTER pContext, PNDIS_OFFLOAD_PARAMET
 #if PARANDIS_SUPPORT_RSC
     UINT64 GuestOffloads;
 
-    if(op->Header.Revision != NDIS_OFFLOAD_PARAMETERS_REVISION_3)
+    DPrintf(0, ("[%s] RscIPv4:%d , RscIPv6: %d\n", __FUNCTION__, (ULONG)op->RscIPv4, (ULONG)op->RscIPv6));
+
+    if (op->Header.Revision != NDIS_OFFLOAD_PARAMETERS_REVISION_3)
         return NDIS_STATUS_SUCCESS;
 
-    if((op->RscIPv4 != NDIS_OFFLOAD_PARAMETERS_NO_CHANGE) &&
-        (!pContext->RSC.bIPv4SupportedSW || !pContext->RSC.bIPv4SupportedHW))
+    if ((op->RscIPv4 != NDIS_OFFLOAD_PARAMETERS_NO_CHANGE) &&
+        (!pContext->RSC.bIPv4SupportedSW ||
+         !pContext->RSC.bIPv4SupportedHW))
         return NDIS_STATUS_NOT_SUPPORTED;
 
-    if((op->RscIPv6 != NDIS_OFFLOAD_PARAMETERS_NO_CHANGE) &&
-        (!pContext->RSC.bIPv6SupportedSW || !pContext->RSC.bIPv6SupportedHW))
+    if ((op->RscIPv6 != NDIS_OFFLOAD_PARAMETERS_NO_CHANGE) &&
+        (!pContext->RSC.bIPv6SupportedSW ||
+         !pContext->RSC.bIPv6SupportedHW))
         return NDIS_STATUS_NOT_SUPPORTED;
 
     if(op->RscIPv4 != NDIS_OFFLOAD_PARAMETERS_NO_CHANGE)
@@ -1205,7 +1153,7 @@ NDIS_STATUS OnSetOffloadEncapsulation(PARANDIS_ADAPTER *pContext, tOidDesc *pOid
                 encaps.IPv6.HeaderSize,
                 encaps.IPv6.Enabled));
 
-            if (encaps.IPv4.Enabled == NDIS_OFFLOAD_SET_ON && encaps.IPv6.Enabled == NDIS_OFFLOAD_SET_ON && 
+            if (encaps.IPv4.Enabled == NDIS_OFFLOAD_SET_ON && encaps.IPv6.Enabled == NDIS_OFFLOAD_SET_ON &&
                 encaps.IPv6.HeaderSize == encaps.IPv4.HeaderSize)
             {
                 pContext->Offload.ipHeaderOffset = encaps.IPv4.HeaderSize;

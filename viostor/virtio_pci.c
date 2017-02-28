@@ -25,7 +25,6 @@
 #include "osdep.h"
 #include "virtio_pci.h"
 #include "virtio_stor_utils.h"
-#include "virtio_stor_hw_helper.h"
 #include "virtio_stor.h"
 
 /* The lower 64k of memory is never mapped so we can use the same routines
@@ -37,54 +36,54 @@
 static u32 ReadVirtIODeviceRegister(ULONG_PTR ulRegister)
 {
     if (ulRegister & ~PORT_MASK) {
-        return StorPortReadRegisterUlong(NULL, (PULONG)(ulRegister));
+        return ScsiPortReadRegisterUlong((PULONG)(ulRegister));
     } else {
-        return StorPortReadPortUlong(NULL, (PULONG)(ulRegister));
+        return ScsiPortReadPortUlong((PULONG)(ulRegister));
     }
 }
 
 static void WriteVirtIODeviceRegister(ULONG_PTR ulRegister, u32 ulValue)
 {
     if (ulRegister & ~PORT_MASK) {
-        StorPortWriteRegisterUlong(NULL, (PULONG)(ulRegister), (ULONG)(ulValue));
+        ScsiPortWriteRegisterUlong((PULONG)(ulRegister), (ULONG)(ulValue));
     } else {
-        StorPortWritePortUlong(NULL, (PULONG)(ulRegister), (ULONG)(ulValue));
+        ScsiPortWritePortUlong((PULONG)(ulRegister), (ULONG)(ulValue));
     }
 }
 
 static u8 ReadVirtIODeviceByte(ULONG_PTR ulRegister)
 {
     if (ulRegister & ~PORT_MASK) {
-        return StorPortReadRegisterUchar(NULL, (PUCHAR)(ulRegister));
+        return ScsiPortReadRegisterUchar((PUCHAR)(ulRegister));
     } else {
-        return StorPortReadPortUchar(NULL, (PUCHAR)(ulRegister));
+        return ScsiPortReadPortUchar((PUCHAR)(ulRegister));
     }
 }
 
 static void WriteVirtIODeviceByte(ULONG_PTR ulRegister, u8 bValue)
 {
     if (ulRegister & ~PORT_MASK) {
-        StorPortWriteRegisterUchar(NULL, (PUCHAR)(ulRegister), (UCHAR)(bValue));
+        ScsiPortWriteRegisterUchar((PUCHAR)(ulRegister), (UCHAR)(bValue));
     } else {
-        StorPortWritePortUchar(NULL, (PUCHAR)(ulRegister), (UCHAR)(bValue));
+        ScsiPortWritePortUchar((PUCHAR)(ulRegister), (UCHAR)(bValue));
     }
 }
 
 static u16 ReadVirtIODeviceWord(ULONG_PTR ulRegister)
 {
     if (ulRegister & ~PORT_MASK) {
-        return StorPortReadRegisterUshort(NULL, (PUSHORT)(ulRegister));
+        return ScsiPortReadRegisterUshort((PUSHORT)(ulRegister));
     } else {
-        return StorPortReadPortUshort(NULL, (PUSHORT)(ulRegister));
+        return ScsiPortReadPortUshort((PUSHORT)(ulRegister));
     }
 }
 
 static void WriteVirtIODeviceWord(ULONG_PTR ulRegister, u16 wValue)
 {
     if (ulRegister & ~PORT_MASK) {
-        StorPortWriteRegisterUshort(NULL, (PUSHORT)(ulRegister), (USHORT)(wValue));
+        ScsiPortWriteRegisterUshort((PUSHORT)(ulRegister), (USHORT)(wValue));
     } else {
-        StorPortWritePortUshort(NULL, (PUSHORT)(ulRegister), (USHORT)(wValue));
+        ScsiPortWritePortUshort((PUSHORT)(ulRegister), (USHORT)(wValue));
     }
 }
 
@@ -117,13 +116,23 @@ static void mem_free_contiguous_pages(void *context, void *virt)
 static ULONGLONG mem_get_physical_address(void *context, void *virt)
 {
     ULONG uLength;
-    STOR_PHYSICAL_ADDRESS pa = StorPortGetPhysicalAddress(context, NULL, virt, &uLength);
+    SCSI_PHYSICAL_ADDRESS pa = ScsiPortGetPhysicalAddress(context, NULL, virt, &uLength);
     return pa.QuadPart;
 }
 
 static void *mem_alloc_nonpaged_block(void *context, size_t size)
 {
-    return VioStorPoolAlloc(context, size);
+    PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)context;
+    PVOID ptr = (PVOID)((ULONG_PTR)adaptExt->poolAllocationVa + adaptExt->poolOffset);
+
+    if ((adaptExt->poolOffset + size) <= adaptExt->poolAllocationSize) {
+        adaptExt->poolOffset += size;
+        RtlZeroMemory(ptr, size);
+        return ptr;
+    } else {
+        RhelDbgPrint(TRACE_LEVEL_FATAL, ("Ran out of memory in %s(%Id)\n", __FUNCTION__, size));
+        return NULL;
+    }
 }
 
 static void mem_free_nonpaged_block(void *context, void *addr)
@@ -169,7 +178,26 @@ static void *pci_map_address_range(void *context, int bar, size_t offset, size_t
     if (bar < PCI_TYPE0_ADDRESSES) {
         PVIRTIO_BAR pBar = &adaptExt->pci_bars[bar];
         if (pBar->pBase == NULL) {
-            pBar->pBase = StorPortGetDeviceBase(
+#ifndef USE_STORPORT
+            if (!ScsiPortValidateRange(
+                adaptExt,
+                PCIBus,
+                adaptExt->system_io_bus_number,
+                pBar->BasePA,
+                pBar->uLength,
+                !!pBar->bPortSpace)) {
+                LogError(adaptExt,
+                        SP_INTERNAL_ADAPTER_ERROR,
+                        __LINE__);
+
+                RhelDbgPrint(TRACE_LEVEL_FATAL, ("Range validation failed %I64x for %x bytes\n",
+                            pBar->BasePA.QuadPart,
+                            pBar->uLength));
+
+                return NULL;
+            }
+#endif
+            pBar->pBase = ScsiPortGetDeviceBase(
                 adaptExt,
                 PCIBus,
                 adaptExt->system_io_bus_number,
@@ -189,19 +217,16 @@ static u16 vdev_get_msix_vector(void *context, int queue)
     PADAPTER_EXTENSION adaptExt = (PADAPTER_EXTENSION)context;
     u16 vector;
 
-    if (queue >= 0) {
-        /* queue interrupt */
-        if (adaptExt->msix_enabled) {
-            if (adaptExt->msix_one_vector) {
-                vector = 0;
-            } else {
-                vector = queue + 1;
-            }
+    if (!adaptExt->dump_mode && adaptExt->msix_vectors > 1) {
+        if (queue >= 0) {
+            /* queue interrupt */
+            vector = (u16)(adaptExt->msix_vectors - 1);
         } else {
-            vector = VIRTIO_MSI_NO_VECTOR;
+            /* on-device-config-change interrupt */
+            vector = 0;
         }
-    } else {
-        /* on-device-config-change interrupt */
+    }
+    else {
         vector = VIRTIO_MSI_NO_VECTOR;
     }
 

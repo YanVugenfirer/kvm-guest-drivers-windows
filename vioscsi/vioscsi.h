@@ -1,10 +1,10 @@
 /**********************************************************************
- * Copyright (c) 2012-2016  Red Hat, Inc.
+ * Copyright (c) 2012-2015  Red Hat, Inc.
  *
  * File: vioscsi.h
  *
  * Main include file
- * This file contains various routines and globals
+ * This file contains vrious routines and globals
  *
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
@@ -15,12 +15,14 @@
 #define ___VIOSCSI_H__
 
 #include <ntddk.h>
+#include <ntddscsi.h>
 #include <storport.h>
-#include "scsiwmi.h"
+#include <scsiwmi.h>
 
 #include "osdep.h"
+#include "srbwrapper.h"
 #include "virtio_pci.h"
-#include "virtio.h"
+#include "VirtIO.h"
 #include "virtio_ring.h"
 
 typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
@@ -41,10 +43,15 @@ typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
 #define IO_PORT_LENGTH          0x40
 #define MAX_CPU                 256
 
+/* See google3/cloud/vmm/guest/virtio_scsi/virtio_scsi_abi.h for abi
+documentation. */
+
 /* Feature Bits */
-#define VIRTIO_SCSI_F_INOUT                    0
-#define VIRTIO_SCSI_F_HOTPLUG                  1
-#define VIRTIO_SCSI_F_CHANGE                   2
+#define VIRTIO_SCSI_F_INOUT                        0
+#define VIRTIO_SCSI_F_HOTPLUG                      1
+#define VIRTIO_SCSI_F_CHANGE                       2
+#define VIRTIO_SCSI_F_GOOGLE_SNAPSHOT              22
+#define VIRTIO_SCSI_F_GOOGLE_REPORT_DRIVER_VERSION 23
 
 /* Response codes */
 #define VIRTIO_SCSI_S_OK                       0
@@ -65,6 +72,7 @@ typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
 #define VIRTIO_SCSI_T_TMF                      0
 #define VIRTIO_SCSI_T_AN_QUERY                 1
 #define VIRTIO_SCSI_T_AN_SUBSCRIBE             2
+#define VIRTIO_SCSI_T_GOOGLE                   0x80000000
 
 /* Valid TMF subtypes.  */
 #define VIRTIO_SCSI_T_TMF_ABORT_TASK           0
@@ -76,12 +84,19 @@ typedef struct VirtIOBufferDescriptor VIO_SG, *PVIO_SG;
 #define VIRTIO_SCSI_T_TMF_QUERY_TASK           6
 #define VIRTIO_SCSI_T_TMF_QUERY_TASK_SET       7
 
+/* Valid Google control queue message subtypes. */
+#define VIRTIO_SCSI_T_GOOGLE_REPORT_DRIVER_VERSION 0
+#define VIRTIO_SCSI_T_GOOGLE_REPORT_SNAPSHOT_READY 1
+
 /* Events.  */
 #define VIRTIO_SCSI_T_EVENTS_MISSED            0x80000000
 #define VIRTIO_SCSI_T_NO_EVENT                 0
 #define VIRTIO_SCSI_T_TRANSPORT_RESET          1
 #define VIRTIO_SCSI_T_ASYNC_NOTIFY             2
 #define VIRTIO_SCSI_T_PARAM_CHANGE             3
+// Google VSS SnapshotRequest events:
+#define VIRTIO_SCSI_T_SNAPSHOT_START           100
+#define VIRTIO_SCSI_T_SNAPSHOT_COMPLETE        101
 
 /* Reasons of transport reset event */
 #define VIRTIO_SCSI_EVT_RESET_HARD             0
@@ -157,6 +172,22 @@ typedef struct {
 } VirtIOSCSICtrlANResp, * PVirtIOSCSICtrlANResp;
 #pragma pack()
 
+/* Google control message */
+#pragma pack(1)
+typedef struct {
+    u32 type;
+    u32 subtype;
+    u8 lun[8];
+    u64 data;
+} VirtIOSCSICtrlGoogleReq, *PVirtIOSCSICtrlGoogleReq;
+#pragma pack()
+
+#pragma pack(1)
+typedef struct {
+    u8 response;
+} VirtIOSCSICtrlGoogleResp, *PVirtIOSCSICtrlGoogleResp;
+#pragma pack()
+
 #pragma pack(1)
 typedef struct {
     u32 event;
@@ -188,11 +219,13 @@ typedef struct {
         VirtIOSCSICmdReq      cmd;
         VirtIOSCSICtrlTMFReq  tmf;
         VirtIOSCSICtrlANReq   an;
+        VirtIOSCSICtrlGoogleReq google;
     } req;
     union {
         VirtIOSCSICmdResp     cmd;
         VirtIOSCSICtrlTMFResp tmf;
         VirtIOSCSICtrlANResp  an;
+        VirtIOSCSICtrlGoogleResp google;
         VirtIOSCSIEvent       event;
     } resp;
 } VirtIOSCSICmd, * PVirtIOSCSICmd;
@@ -233,17 +266,46 @@ typedef struct _SRB_EXTENSION {
 #if (INDIRECT_SUPPORTED == 1)
     VRING_DESC_ALIAS      desc[VIRTIO_MAX_SG];
 #endif
+#ifdef ENABLE_WMI
+    ULONGLONG             startTsc;
+#endif
     UCHAR                 cpu;
     PVOID                 priv;
-}SRB_EXTENSION, * PSRB_EXTENSION;
+ } SRB_EXTENSION, * PSRB_EXTENSION;
 #pragma pack()
 
 #pragma pack(1)
 typedef struct {
     SCSI_REQUEST_BLOCK    Srb;
     PSRB_EXTENSION        SrbExtension;
-}TMF_COMMAND, * PTMF_COMMAND;
+} TMF_COMMAND, * PTMF_COMMAND;
 #pragma pack()
+
+#ifdef ENABLE_WMI
+// Note: the members in these stat structs must be in the same
+// order as in the MOF file.
+typedef struct {
+    ULONGLONG TotalRequests;
+    ULONGLONG CompletedRequests;
+    ULONGLONG TotalKicks;
+    ULONGLONG SkippedKicks;
+    ULONGLONG TotalInterrupts;
+    ULONGLONG QueueFullEvents;
+    ULONGLONG MaxLatency;
+    ULONGLONG BusyRequests;
+    ULONGLONG LastStartIo;
+    ULONGLONG MaxStartIoDelay;
+} VIRTQUEUE_STATISTICS, *PVIRTQUEUE_STATISTICS;
+
+typedef struct {
+    ULONGLONG TotalRequests;
+    ULONGLONG CompletedRequests;
+    ULONGLONG ResetRequests;
+    ULONGLONG MaxLatency;
+    ULONGLONG BusyRequests;
+} TARGET_STATISTICS, *PTARGET_STATISTICS;
+#define MAX_TARGET 256
+#endif
 
 typedef struct virtio_bar {
     PHYSICAL_ADDRESS  BasePA;
@@ -264,7 +326,6 @@ typedef struct _ADAPTER_EXTENSION {
     ULONG                 poolOffset;
 
     struct virtqueue *    vq[VIRTIO_SCSI_QUEUE_LAST];
-    ULONG_PTR             device_base;
     VirtIOSCSIConfig      scsi_config;
     union {
         PCI_COMMON_HEADER pci_config;
@@ -286,19 +347,44 @@ typedef struct _ADAPTER_EXTENSION {
     TMF_COMMAND           tmf_cmd;
     BOOLEAN               tmf_infly;
 
+    USHORT                original_queue_num[4];  // last element used as pad.
+
     PVirtIOSCSIEventNode  events;
 
     ULONG                 num_queues;
     UCHAR                 cpu_to_vq_map[MAX_CPU];
 #if (NTDDI_VERSION > NTDDI_WIN7)
     STOR_SLIST_HEADER     srb_list[MAX_CPU];
+    PGROUP_AFFINITY       pmsg_affinity;
 #endif
     ULONG                 perfFlags;
-    PGROUP_AFFINITY       pmsg_affinity;
+
     BOOLEAN               dpc_ok;
     PSTOR_DPC             dpc;
-
+    // SRB sent by agent. It's IOCTL_SCSI_MINIPORT with Control code
+    // SNAPSHOT_REQUESTED. Driver complete this srb when it got a snapshot
+    // request from backend.
+    PSRB_TYPE             srb_snapshot_requested;
+    // SRB sent by provider during commit. It's IOCTL_SCSI_MINIPORT with Control
+    // code SNAPSHOT_CAN_PROCEED. Driver complete this srb when it got an event
+    // notification from backend to indicate that the snapshot is finished in
+    // the backend, and IO can be resumed.
+    PSRB_TYPE             srb_snapshot_can_proceeed;
+    // Global SRB and extension for fast-failing snapshot requests. Will only be
+    // used in the interrupt routine so there is no risk of a data race.
+    SCSI_REQUEST_BLOCK snapshot_fail_srb;
+    SRB_EXTENSION snapshot_fail_extension;
+#ifdef ENABLE_WMI
     SCSI_WMILIB_CONTEXT   WmiLibContext;
+    SCSI_WMILIB_CONTEXT   PdoWmiLibContext;
+    VIRTQUEUE_STATISTICS  QueueStats[MAX_CPU];
+    TARGET_STATISTICS     TargetStats[MAX_TARGET];
+    ULONG                 MaxTarget;
+#if (NTDDI_VERSION < NTDDI_WIN8)
+    USHORT                PortNumber;
+#endif
+#endif
+
     ULONGLONG             hba_id;
     PUCHAR                ser_num;
 }ADAPTER_EXTENSION, * PADAPTER_EXTENSION;
@@ -335,4 +421,4 @@ typedef struct {
 #define SPC3_SCSI_SENSEQ_MODE_PARAMETERS_CHANGED            0x01
 #define SPC3_SCSI_SENSEQ_CAPACITY_DATA_HAS_CHANGED          0x09
 
-#endif ___VIOSCSI__H__
+#endif // ___VIOSCSI__H__

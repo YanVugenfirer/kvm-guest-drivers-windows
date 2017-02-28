@@ -13,6 +13,8 @@
 #include <ntstrsafe.h>
 
 // Global debug printout level and enable\disable flag
+
+// Global debug printout level and enable\disable flag
 int virtioDebugLevel;
 int bDebugPrint;
 int nViostorDebugLevel;
@@ -25,42 +27,42 @@ int nViostorDebugLevel;
 
 static void DebugPrintFuncSerial(const char *format, ...)
 {
-    char buf[TEMP_BUFFER_SIZE];
-    NTSTATUS status;
-    size_t len;
-    va_list list;
-    va_start(list, format);
-    status = RtlStringCbVPrintfA(buf, sizeof(buf), format, list);
-    if (status == STATUS_SUCCESS)
-    {
-        len = strlen(buf);
-    }
-    else
-    {
-        len = 2;
-        buf[0] = 'O';
-        buf[1] = '\n';
-    }
-    if (len)
-    {
+	char buf[TEMP_BUFFER_SIZE];
+	NTSTATUS status;
+	size_t len;
+	va_list list;
+	va_start(list, format);
+	status = RtlStringCbVPrintfA(buf, sizeof(buf), format, list);
+	if (status == STATUS_SUCCESS)
+	{
+		len = strlen(buf);
+	}
+	else
+	{
+		len = 2;
+		buf[0] = 'O';
+		buf[1] = '\n';
+	}
+	if (len)
+	{
         WRITE_PORT_BUFFER_UCHAR(RHEL_DEBUG_PORT, (PUCHAR)buf, len);
         WRITE_PORT_UCHAR(RHEL_DEBUG_PORT, '\r');
-    }
+	}
 }
 #endif
-
+        //
 #if defined(PRINT_DEBUG)
 static void DebugPrintFunc(const char *format, ...)
 {
-    va_list list;
-    va_start(list, format);
-    vDbgPrintEx(DPFLTR_DEFAULT_ID, 9 | DPFLTR_MASK, format, list);
+	va_list list;
+	va_start(list, format);
+	vDbgPrintEx(DPFLTR_DEFAULT_ID, 9 | DPFLTR_MASK, format, list);
 }
 #endif
 
 static void DebugPrintFuncWPP(const char *format, ...)
 {
-    // TODO later, if needed
+	// TODO later, if needed
 }
 
 static void NoDebugPrintFunc(const char *format, ...)
@@ -72,16 +74,16 @@ void InitializeDebugPrints(IN PDRIVER_OBJECT  DriverObject, PUNICODE_STRING Regi
     //TBD - Read nDebugLevel and bDebugPrint from the registry
     bDebugPrint = 1;
     virtioDebugLevel = 0;
-    nViostorDebugLevel = TRACE_LEVEL_ERROR;//TRACE_LEVEL_VERBOSE;//
+	nViostorDebugLevel = TRACE_LEVEL_ERROR;
 
 #if defined(EVENT_TRACING)
-    VirtioDebugPrintProc = DebugPrintFuncWPP;
+	VirtioDebugPrintProc = DebugPrintFuncWPP;
 #elif defined(PRINT_DEBUG)
-    VirtioDebugPrintProc = DebugPrintFunc;
+	VirtioDebugPrintProc = DebugPrintFunc;
 #elif defined(COM_DEBUG)
-    VirtioDebugPrintProc = DebugPrintFuncSerial;
+	VirtioDebugPrintProc = DebugPrintFuncSerial;
 #else
-    VirtioDebugPrintProc = NoDebugPrintFunc;
+	VirtioDebugPrintProc = NoDebugPrintFunc;
 #endif
 }
 

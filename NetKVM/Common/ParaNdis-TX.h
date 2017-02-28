@@ -92,7 +92,7 @@ public:
     { return (ParsePriority() && ParseBuffers() && ParseOffloads()); }
     void StartMapping();
     void RegisterMappedNB(CNB *NB);
-    bool MappingSucceeded() { return !m_HaveFailedMappings; }
+    bool MappingSuceeded() { return !m_HaveFailedMappings; }
     void SetStatus(NDIS_STATUS Status)
     { m_NBL->Status = Status; }
 
@@ -113,9 +113,8 @@ public:
     bool IsSendDone();
 
     UCHAR ProtocolID()
-    {
-        return reinterpret_cast<UCHAR>(NET_BUFFER_LIST_INFO(m_NBL, NetBufferListProtocolId));
-    }
+    { return static_cast<UCHAR>(
+        reinterpret_cast<ULONG_PTR>(NET_BUFFER_LIST_INFO(m_NBL, NetBufferListProtocolId))); }
     bool MatchCancelID(PVOID ID)
     { return NDIS_GET_NET_BUFFER_LIST_CANCEL_ID(m_NBL) == ID; }
     ULONG MSS()
@@ -179,7 +178,6 @@ private:
 
     ULONG m_MaxDataLength = 0;
     ULONG m_TransferSize = 0;
-    ULONG  m_LogIndex;
 
     UINT16 m_TCI = 0;
 

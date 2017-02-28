@@ -44,8 +44,7 @@ class PnPControl
         for(Iterator it = Controllers.begin(); it != Controllers.end(); it++)
             (*it)->handleEvent(*this);
     }
-    PnPControl() :  Thread(INVALID_HANDLE_VALUE), Notification(0, 0, 0),
-      PortNotify(NULL), ControllerNotify(NULL)
+    PnPControl() :  Thread(INVALID_HANDLE_VALUE), Notification(0, 0, 0)
     {
         IsRunningAsService();
         Init();
@@ -143,12 +142,9 @@ private:
     BOOL GuestConnected;
     HDEVNOTIFY Notify;
     PnPControl* Control;
-    UINT Reference;
 public:
     SerialPort(wstring LinkName, PnPControl* ptr);
     virtual ~SerialPort();
-    void AddRef();
-    void Release();
     BOOL OpenPort();
     void ClosePort();
     BOOL ReadPort(PVOID buf, size_t *len);

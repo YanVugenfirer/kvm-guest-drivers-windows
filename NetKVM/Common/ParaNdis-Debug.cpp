@@ -10,7 +10,6 @@
  *
 **********************************************************************/
 #include "ndis56common.h"
-#include "ParaNdis_DebugHistory.h"
 
 extern "C"
 {
@@ -156,29 +155,17 @@ void ParaNdis_DebugCleanup(PDRIVER_OBJECT  pDriverObject)
 
 
 #define MAX_CONTEXTS    4
-
 #if defined(ENABLE_HISTORY_LOG)
 #define MAX_HISTORY     0x40000
 #else
 #define MAX_HISTORY     2
 #endif
-
-#if defined(KEEP_PENDING_NBL)
-#define MAX_KEEP_NBLS   1024
-#else
-#define MAX_KEEP_NBLS   1
-#endif
-
 typedef struct _tagBugCheckStaticData
 {
     tBugCheckStaticDataHeader Header;
     tBugCheckPerNicDataContent PerNicData[MAX_CONTEXTS];
     tBugCheckStaticDataContent Data;
     tBugCheckHistoryDataEntry  History[MAX_HISTORY];
-
-    RTL_BITMAP          PendingNblsBitmap;
-    ULONG               PendingNblsBitmapBuffer[MAX_KEEP_NBLS/32 + !!(MAX_KEEP_NBLS%32)];
-    tPendingNBlEntry    PendingNbls[MAX_KEEP_NBLS];
 }tBugCheckStaticData;
 
 
@@ -200,16 +187,12 @@ VOID ParaNdis_PrepareBugCheckData()
     BugCheckData.StaticData.Header.PerNicData = (UINT_PTR)(PVOID)BugCheckData.StaticData.PerNicData;
     BugCheckData.StaticData.Header.DataArea = (UINT64)&BugCheckData.StaticData.Data;
     BugCheckData.StaticData.Header.DataAreaSize = sizeof(BugCheckData.StaticData.Data);
-    BugCheckData.StaticData.Data.StaticDataV0.HistoryDataVersion = PARANDIS_DEBUG_HISTORY_DATA_VERSION;
-    BugCheckData.StaticData.Data.StaticDataV0.SizeOfHistory = MAX_HISTORY;
-    BugCheckData.StaticData.Data.StaticDataV0.SizeOfHistoryEntry = sizeof(tBugCheckHistoryDataEntry);
-    BugCheckData.StaticData.Data.StaticDataV0.HistoryData = (UINT_PTR)(PVOID)BugCheckData.StaticData.History;
-    BugCheckData.StaticData.Data.PendingNblEntryVersion = PARANDIS_DEBUG_PENDING_NBL_ENTRY_VERSION;
-    BugCheckData.StaticData.Data.PendingNblData = (UINT_PTR)(PVOID)BugCheckData.StaticData.PendingNbls;
-    BugCheckData.StaticData.Data.MaxPendingNbl = MAX_KEEP_NBLS;
+    BugCheckData.StaticData.Data.HistoryDataVersion = PARANDIS_DEBUG_HISTORY_DATA_VERSION;
+    BugCheckData.StaticData.Data.SizeOfHistory = MAX_HISTORY;
+    BugCheckData.StaticData.Data.SizeOfHistoryEntry = sizeof(tBugCheckHistoryDataEntry);
+    BugCheckData.StaticData.Data.HistoryData = (UINT_PTR)(PVOID)BugCheckData.StaticData.History;
     BugCheckData.Location.Address = (UINT64)&BugCheckData;
     BugCheckData.Location.Size = sizeof(BugCheckData);
-    RtlInitializeBitMap(&BugCheckData.StaticData.PendingNblsBitmap, BugCheckData.StaticData.PendingNblsBitmapBuffer, MAX_KEEP_NBLS);
 }
 
 void ParaNdis_DebugRegisterMiniport(PARANDIS_ADAPTER *pContext, BOOLEAN bRegister)
@@ -243,7 +226,7 @@ static UINT FillDataOnBugCheck()
             pSave->nofReadyTxBuffers += p->pPathBundles[j].txPath.GetFreeHWBuffers();
         }
 
-        pSave->LastInterruptTimeStamp.QuadPart = PARANDIS_GET_LAST_INTERRUPT_TIMESTAMP(p);
+        pSave->LastInterruptTimeStamp.QuadPart = PARADNIS_GET_LAST_INTERRUPT_TIMESTAMP(p);
         pSave->LastTxCompletionTimeStamp = p->LastTxCompletionTimeStamp;
         ParaNdis_CallOnBugCheck(p);
         ++n;
@@ -320,48 +303,4 @@ void ParaNdis_DebugHistory(
     NdisGetCurrentSystemTime(&phe->TimeStamp);
 }
 
-#endif
-
-#if defined(KEEP_PENDING_NBL)
-
-void ParaNdis_DebugNBLIn(PNET_BUFFER_LIST nbl, ULONG& index)
-{
-    NdisAcquireSpinLock(&CrashLock);
-    index = RtlFindClearBitsAndSet(&BugCheckData.StaticData.PendingNblsBitmap, 1, 0);
-    NdisReleaseSpinLock(&CrashLock);
-    if (index < MAX_KEEP_NBLS)
-    {
-        BugCheckData.StaticData.PendingNbls[index].NBL = (ULONG_PTR)(PVOID)nbl;
-        NdisGetCurrentSystemTime(&BugCheckData.StaticData.PendingNbls[index].TimeStamp);
-    }
-    else
-    {
-        // if no free bit in bitmap, ULONG(-1) returned
-        BugCheckData.StaticData.Data.fNBLOverflow = 1;
-    }
-}
-
-void ParaNdis_DebugNBLOut(ULONG index, PNET_BUFFER_LIST nbl)
-{
-    if (index >= MAX_KEEP_NBLS)
-        return;
-
-    NdisAcquireSpinLock(&CrashLock);
-    if (!RtlCheckBit(&BugCheckData.StaticData.PendingNblsBitmap, index))
-    {
-        // simple double free
-        RtlAssert(__FUNCTION__, __FILE__, __LINE__, NULL);
-    }
-    else if (BugCheckData.StaticData.PendingNbls[index].NBL != (ULONG_PTR)(PVOID)nbl)
-    {
-        // complicated double free
-        RtlAssert(__FUNCTION__, __FILE__, __LINE__, NULL);
-    }
-    else
-    {
-        RtlClearBit(&BugCheckData.StaticData.PendingNblsBitmap, index);
-        BugCheckData.StaticData.PendingNbls[index].NBL = 0;
-    }
-    NdisReleaseSpinLock(&CrashLock);
-}
 #endif

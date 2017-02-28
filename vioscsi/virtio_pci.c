@@ -16,7 +16,7 @@
  *
  */
 /**********************************************************************
- * Copyright (c) 2012-2016 Red Hat, Inc.
+ * Copyright (c) 2008  Red Hat, Inc.
  *
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
@@ -25,6 +25,7 @@
 #include "osdep.h"
 #include "virtio_pci.h"
 #include "utils.h"
+#include "helper.h"
 #include "vioscsi.h"
 
 /* The lower 64k of memory is never mapped so we can use the same routines

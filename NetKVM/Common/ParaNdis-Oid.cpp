@@ -215,7 +215,7 @@ NDIS_STATUS ParaNdis_OidQueryCommon(PARANDIS_ADAPTER *pContext, tOidDesc *pOid)
         USHORT                                  us;
         NDIS_PNP_CAPABILITIES                   PMCaps;
     } u;
-#define SETINFO(field, value) pInfo = &u.##field; ulSize = sizeof(u.##field); u.##field = (value)
+#define SETINFO(field, value) pInfo = &u.field; ulSize = sizeof(u.field); u.field = (value)
     switch (pOid->Oid)
     {
     case OID_GEN_SUPPORTED_LIST:

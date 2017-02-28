@@ -19,11 +19,11 @@
 #include "osdep.h"
 #define VIRTIO_PCI_NO_LEGACY
 #include "virtio_pci.h"
-#include "virtio.h"
+#include "VirtIO.h"
 #include "kdebugprint.h"
 #include "virtio_ring.h"
 #include "virtio_pci_common.h"
-#include "windows\virtio_ring_allocation.h"
+#include "windows/virtio_ring_allocation.h"
 #include <stddef.h>
 
 #ifdef WPP_EVENT_TRACING
@@ -230,8 +230,8 @@ static size_t vring_pci_size(u16 num)
 static NTSTATUS vio_modern_query_vq_alloc(VirtIODevice *vdev,
                                           unsigned index,
                                           unsigned short *pNumEntries,
-                                          unsigned long *pRingSize,
-                                          unsigned long *pHeapSize)
+                                          ULONG *pRingSize,
+                                          ULONG *pHeapSize)
 {
     volatile struct virtio_pci_common_cfg *cfg = vdev->common;
     u16 num;
@@ -258,11 +258,44 @@ static NTSTATUS vio_modern_query_vq_alloc(VirtIODevice *vdev,
     }
 
     *pNumEntries = num;
-    *pRingSize = (unsigned long)vring_pci_size(num);
+    *pRingSize = (ULONG)vring_pci_size(num);
     *pHeapSize = vring_control_block_size() + sizeof(void *) * num;
 
     return STATUS_SUCCESS;
 }
+
+static NTSTATUS vio_modern_set_vq_alloc(VirtIODevice *vdev,
+                                        unsigned index,
+                                        unsigned short numEntries)
+{
+    volatile struct virtio_pci_common_cfg *cfg = vdev->common;
+    u16 num;
+
+    if (index >= ioread16(vdev, &cfg->num_queues)) {
+        return STATUS_NOT_FOUND;
+    }
+
+    if (numEntries & (numEntries - 1)) {
+        DPrintf(0, ("%p: bad queue size %u", vdev, numEntries));
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    /* Select the queue we're interested in */
+    iowrite16(vdev, (u16)index, &cfg->queue_select);
+
+    /* Check if queue is either not available or already active. */
+    num = ioread16(vdev, &cfg->queue_size);
+    /* QEMU has a bug where queues don't revert to inactive on device
+     * reset. Skip checking the queue_enable field until it is fixed.
+     */
+    if (!num /*|| ioread16(vdev, &cfg->queue_enable)*/) {
+        return STATUS_NOT_FOUND;
+    }
+
+    iowrite16(vdev, numEntries, &cfg->queue_size);
+    return STATUS_SUCCESS;
+}
+
 
 static NTSTATUS vio_modern_setup_vq(struct virtqueue **queue,
                                     VirtIODevice *vdev,
@@ -274,7 +307,7 @@ static NTSTATUS vio_modern_setup_vq(struct virtqueue **queue,
     struct virtqueue *vq;
     void *vq_addr;
     u16 off;
-    unsigned long ring_size, heap_size;
+    ULONG ring_size, heap_size;
     NTSTATUS status;
 
     /* select the queue and query allocation parameters */
@@ -401,6 +434,7 @@ static const struct virtio_device_ops virtio_pci_device_ops = {
     .query_queue_alloc = vio_modern_query_vq_alloc,
     .setup_queue = vio_modern_setup_vq,
     .delete_queue = vio_modern_del_vq,
+    .set_queue_alloc = vio_modern_set_vq_alloc,
 };
 
 static u8 find_next_pci_vendor_capability(VirtIODevice *vdev, u8 offset)

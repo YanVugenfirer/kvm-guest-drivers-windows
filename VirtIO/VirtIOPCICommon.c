@@ -19,7 +19,7 @@
 
 #include "osdep.h"
 #include "virtio_pci.h"
-#include "virtio.h"
+#include "VirtIO.h"
 #include "kdebugprint.h"
 #include <stddef.h>
 
@@ -195,10 +195,17 @@ void virtio_set_config(VirtIODevice *vdev, unsigned offset,
 NTSTATUS virtio_query_queue_allocation(VirtIODevice *vdev,
                                        unsigned index,
                                        unsigned short *pNumEntries,
-                                       unsigned long *pRingSize,
-                                       unsigned long *pHeapSize)
+                                       ULONG *pRingSize,
+                                       ULONG *pHeapSize)
 {
     return vdev->device->query_queue_alloc(vdev, index, pNumEntries, pRingSize, pHeapSize);
+}
+
+NTSTATUS virtio_set_queue_allocation(VirtIODevice *vdev,
+                                     unsigned index,
+                                     unsigned short numEntries)
+{
+    return vdev->device->set_queue_alloc(vdev, index, numEntries);
 }
 
 NTSTATUS virtio_reserve_queue_memory(VirtIODevice *vdev, unsigned nvqs)
@@ -375,6 +382,5 @@ bool vp_notify(struct virtqueue *vq)
     /* we write the queue's selector into the notification register to
      * signal the other end */
     iowrite16(vq->vdev, (unsigned short)vq->index, vq->priv);
-    DPrintf(0, ("virtio: vp_notify vq->index = %x\n", vq->index));
     return true;
 }

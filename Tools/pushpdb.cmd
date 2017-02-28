@@ -23,7 +23,6 @@ if "%DSTORE_LOCATION%"=="" (
     echo Should be configured as: %%DSTORE_LOCATION%%
     echo                     "(environment variable.)"
     call :usage %~0
-    goto :eof
 )
 
 set store_address=%DSTORE_LOCATION%

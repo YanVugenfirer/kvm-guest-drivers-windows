@@ -1,0 +1,228 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'
+     xmlns:difx='http://schemas.microsoft.com/wix/DifxAppExtension'>
+
+  <?define Manufacturer="Google"?>
+  <?define Product="GCEWindowsDrivers"?>
+
+  <Product Id="*"
+           Name="$(var.Product)"
+           Language="1033"
+           Version="!(bind.fileVersion.vioscsi.sys)"
+           Manufacturer="$(var.Manufacturer)"
+           UpgradeCode="92B13B7C-18F2-40A1-BB62-0E7D87E959CC">
+
+    <Package Id="*"
+             InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Platform="x64"/>
+
+    <Media Id="1"
+           Cabinet="gcewindowsdrivers.cab"
+           EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="$(var.Product)">
+          <!-- Driver installation requires one directory per driver -->
+          <Directory Id="vioscsi" Name="vioscsi"/>
+          <Directory Id="netkvm" Name="netkvm"/>
+          <Directory Id="nvme" Name="nvme"/>
+        </Directory>
+      </Directory>
+    </Directory>
+    <ComponentGroup Id="vioscsi_files" Directory="vioscsi">
+      <Component Id='vioscsi'
+                 Guid='95630E42-E342-4269-A5D1-F49ADA328AFD'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 601]]></Condition>
+        <File Id='vioscsi.inf'
+              Name='vioscsi.inf'
+              DiskId='1'
+              Source='release\vioscsi.inf'
+              KeyPath='yes'/>
+        <File Id='vioscsi.sys'
+              Name='vioscsi.sys'
+              DiskId='1'
+              Source='release\vioscsi.sys' />
+        <File Id='vioscsi.cat'
+              Name='vioscsi.cat'
+              DiskId='1'
+              Source='release\vioscsi.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win8_vioscsi'
+                 Guid='37CBCF73-6C58-434E-B83D-A71120FF381E'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 602]]></Condition>
+        <File Id='win8_vioscsi.inf'
+              Name='vioscsi.inf'
+              DiskId='1'
+              Source='win8\vioscsi.inf' />
+        <File Id='win8_vioscsi.sys'
+              Name='vioscsi.sys'
+              DiskId='1'
+              Source='win8\vioscsi.sys' />
+        <File Id='win8_vioscsi.cat'
+              Name='vioscsi.cat'
+              DiskId='1'
+              Source='win8\vioscsi.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win81_vioscsi'
+                 Guid='7B617E77-F0FB-4D06-AE4F-B4D70C884F74'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT > 602]]></Condition>
+        <File Id='win81_vioscsi.inf'
+              Name='vioscsi.inf'
+              DiskId='1'
+              Source='win81\vioscsi.inf' />
+        <File Id='win81_vioscsi.sys'
+              Name='vioscsi.sys'
+              DiskId='1'
+              Source='win81\vioscsi.sys' />
+        <File Id='win81_vioscsi.cat'
+              Name='vioscsi.cat'
+              DiskId='1'
+              Source='win81\vioscsi.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="netkvm_files" Directory="netkvm">
+      <Component Id='netkvm'
+                 Guid='0CD52929-F1B1-4525-8517-CA7D756E2912'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 601]]></Condition>
+        <File Id='netkvm.inf'
+              Name='netkvm.inf'
+              DiskId='1'
+              Source='release\netkvm.inf' />
+        <File Id='netkvm.sys'
+              Name='netkvm.sys'
+              DiskId='1'
+              Source='release\netkvm.sys' />
+        <File Id='netkvm.cat'
+              Name='netkvm.cat'
+              DiskId='1'
+              Source='release\netkvm.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win8_netkvm'
+                 Guid='86E629D7-8177-4EF4-ADB4-CA592C62A2F7'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 602]]></Condition>
+        <File Id='win8_netkvm.inf'
+              Name='netkvm.inf'
+              DiskId='1'
+              Source='win8\netkvm.inf' />
+        <File Id='win8_netkvm.sys'
+              Name='netkvm.sys'
+              DiskId='1'
+              Source='win8\netkvm.sys' />
+        <File Id='win8_netkvm.cat'
+              Name='netkvm.cat'
+              DiskId='1'
+              Source='win8\netkvm.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win81_netkvm'
+                 Guid='B87F7E3A-A902-43F8-9FE2-B9B02283F3F0'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT > 602]]></Condition>
+        <File Id='win81_netkvm.inf'
+              Name='netkvm.inf'
+              DiskId='1'
+              Source='win81\netkvm.inf' />
+        <File Id='win81_netkvm.sys'
+              Name='netkvm.sys'
+              DiskId='1'
+              Source='win81\netkvm.sys' />
+        <File Id='win81_netkvm.cat'
+              Name='netkvm.cat'
+              DiskId='1'
+              Source='win81\netkvm.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="nvme_files" Directory="nvme">
+      <Component Id='nvme'
+                 Guid='94E9EC1A-97D4-4B85-B30F-C602B3E0B689'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 601]]></Condition>
+        <File Id='nvme.inf'
+              Name='nvme.inf'
+              DiskId='1'
+              Source='release\nvme.inf' />
+        <File Id='nvme.sys'
+              Name='nvme.sys'
+              DiskId='1'
+              Source='release\nvme.sys' />
+        <File Id='nvme64.cat'
+              Name='nvme64.cat'
+              DiskId='1'
+              Source='release\nvme64.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win8_nvme'
+                 Guid='8B3A70A5-D711-4BC5-BB7C-47A045E55D79'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT = 602]]></Condition>
+        <File Id='win8_nvme.inf'
+              Name='nvme.inf'
+              DiskId='1'
+              Source='win8\nvme.inf' />
+        <File Id='win8_nvme.sys'
+              Name='nvme.sys'
+              DiskId='1'
+              Source='win8\nvme.sys' />
+        <File Id='win8_nvme64.cat'
+              Name='nvme64.cat'
+              DiskId='1'
+              Source='win8\nvme64.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+      <Component Id='win81_nvme'
+                 Guid='8204CDF8-B8A6-4B9C-A698-4784B2786BA0'
+                 Transitive='yes'
+                 Win64='yes'>
+        <Condition><![CDATA[VersionNT > 602]]></Condition>
+        <File Id='win81_nvme.inf'
+              Name='nvme.inf'
+              DiskId='1'
+              Source='win81\nvme.inf' />
+        <File Id='win81_nvme.sys'
+              Name='nvme.sys'
+              DiskId='1'
+              Source='win81\nvme.sys' />
+        <File Id='win81_nvme64.cat'
+              Name='nvme64.cat'
+              DiskId='1'
+              Source='win81\nvme64.cat' />
+        <difx:Driver PlugAndPlayPrompt='no'
+                     AddRemovePrograms='no' />
+      </Component>
+    </ComponentGroup>
+    <Feature Id='Complete' Level='1'>
+      <ComponentGroupRef Id='vioscsi_files' />
+      <ComponentGroupRef Id='netkvm_files' />
+      <ComponentGroupRef Id='nvme_files' />
+    </Feature>
+  </Product>
+</Wix>

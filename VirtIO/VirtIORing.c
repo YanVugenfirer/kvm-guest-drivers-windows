@@ -18,7 +18,8 @@
  */
 #include "osdep.h"
 #include "virtio_pci.h"
-#include "virtio.h"
+#include "linux/virtio_config.h"
+#include "VirtIO.h"
 #include "kdebugprint.h"
 #include "virtio_ring.h"
 
@@ -474,6 +475,15 @@ BOOLEAN virtqueue_has_buf(struct virtqueue *_vq)
     return !vq->broken && more_used(vq);
 }
 
+u16 virtqueue_get_last_used_idx(struct virtqueue *_vq) {
+    struct vring_virtqueue *vq = to_vvq(_vq);
+    return vq->last_used_idx;
+}
+
+u16 virtqueue_get_used_idx(struct virtqueue *_vq) {
+    struct vring_virtqueue *vq = to_vvq(_vq);
+    return vq->vring.used->idx;
+}
 /*
  changed: vring_shutdown brings the queue to initial state, as it was
  upon initialization (for proper power management)

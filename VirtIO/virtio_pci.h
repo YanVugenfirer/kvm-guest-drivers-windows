@@ -221,8 +221,8 @@ struct virtio_device_ops
     // query virtual queue size and memory requirements
     NTSTATUS (*query_queue_alloc)(VirtIODevice *vdev,
         unsigned index, unsigned short *pNumEntries,
-        unsigned long *pRingSize,
-        unsigned long *pHeapSize);
+        ULONG *pRingSize,
+        ULONG *pHeapSize);
 
     // allocate and initialize a queue
     NTSTATUS (*setup_queue)(struct virtqueue **queue,
@@ -231,6 +231,10 @@ struct virtio_device_ops
 
     // tear down and deallocate a queue
     void (*delete_queue)(VirtIOQueueInfo *info);
+
+    NTSTATUS (*set_queue_alloc)(VirtIODevice *vdev,
+        unsigned index, unsigned short numEntries);
+
 };
 
 struct virtio_device
@@ -271,6 +275,7 @@ struct virtio_device
     VirtIOQueueInfo *info;
     VirtIOQueueInfo inline_info[MAX_QUEUES_PER_DEVICE_DEFAULT];
 };
+#define VIRTIO_DEVICE_DEFINED
 
 /* Driver API: device init and shutdown
  * DeviceContext is a driver defined opaque value which will be passed to driver
@@ -331,8 +336,11 @@ void virtio_set_config(VirtIODevice *vdev, unsigned offset,
  */
 NTSTATUS virtio_query_queue_allocation(VirtIODevice *vdev, unsigned index,
                                        unsigned short *pNumEntries,
-                                       unsigned long *pRingSize,
-                                       unsigned long *pHeapSize);
+                                       ULONG *pRingSize,
+                                       ULONG *pHeapSize);
+
+NTSTATUS virtio_set_queue_allocation(VirtIODevice *vdev, unsigned index,
+                                     unsigned short numEntries);
 
 NTSTATUS virtio_reserve_queue_memory(VirtIODevice *vdev, unsigned nvqs);
 
@@ -357,9 +365,9 @@ void virtio_delete_queues(VirtIODevice *vdev);
 void virtio_set_queue_event_suppression(struct virtqueue *vq, bool enable);
 
 u32 virtio_get_queue_size(struct virtqueue *vq);
-unsigned long virtio_get_indirect_page_capacity();
+u32 virtio_get_indirect_page_capacity();
 
-ULONG __inline virtio_get_queue_descriptor_size()
+static inline ULONG virtio_get_queue_descriptor_size()
 {
     return sizeof(VirtIOQueueInfo);
 }

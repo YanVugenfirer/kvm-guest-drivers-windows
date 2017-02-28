@@ -244,7 +244,7 @@ typedef struct _tagChecksumCheckResult
 /*
 for simplicity, we use for NDIS5 the same statistics as native NDIS6 uses
 */
-typedef struct _tagNdisStatistics
+typedef struct _tagNdisStatustics
 {
     ULONG64                     ifHCInOctets;
     ULONG64                     ifHCInUcastPkts;
@@ -487,13 +487,13 @@ typedef struct _tagSynchronizedContext
 typedef BOOLEAN (*tSynchronizedProcedure)(tSynchronizedContext *context);
 
 /**********************************************************
-LAZY release procedure returns buffers to VirtIO
+LAZZY release procedure returns buffers to VirtIO
 only where there are no free buffers available
 
-NON-LAZY release releases transmit buffers from VirtIO
+NON-LAZZY release releases transmit buffers from VirtIO
 library every time there is something to release
 ***********************************************************/
-//#define LAZY_TX_RELEASE
+//#define LAZZY_TX_RELEASE
 
 static inline bool VirtIODeviceGetHostFeature(PARANDIS_ADAPTER *pContext, unsigned uFeature)
 {
@@ -512,7 +512,7 @@ static inline void VirtIODeviceEnableGuestFeature(PARANDIS_ADAPTER *pContext, un
 
 BOOLEAN FORCEINLINE IsTimeToReleaseTx(PARANDIS_ADAPTER *pContext)
 {
-#ifndef LAZY_TX_RELEASE
+#ifndef LAZZY_TX_RELEASE
     return pContext->nofFreeTxDescriptors < pContext->maxFreeTxDescriptors;
 #else
     return pContext->nofFreeTxDescriptors == 0;
@@ -658,7 +658,7 @@ typedef struct _tagTxOperationParameters
     PVOID           ReferenceValue;
     UINT            nofSGFragments;
     ULONG           ulDataSize;
-    ULONG           offloadMss;
+    ULONG           offloalMss;
     ULONG           tcpHeaderOffset;
     ULONG           flags;      //see tPacketOffloadRequest
 }tTxOperationParameters;
@@ -770,6 +770,12 @@ typedef struct _tagPhysicalAddressAllocationContext
 BOOLEAN ParaNdis_InitialAllocatePhysicalMemory(
     PARANDIS_ADAPTER *pContext,
     tCompletePhysicalAddress *pAddresses);
+
+BOOLEAN ParaNdis_RuntimeRequestToAllocatePhysicalMemory(
+    PARANDIS_ADAPTER *pContext,
+    tCompletePhysicalAddress *pAddresses,
+    tOnAdditionalPhysicalMemoryAllocated Callback
+    );
 
 VOID ParaNdis_FreePhysicalMemory(
     PARANDIS_ADAPTER *pContext,

@@ -90,8 +90,13 @@ static const tConfigurationEntries defaultConfiguration =
     { "ConnectRate",    100,10,10000 },
     { "DoLog",          1,  0,  1 },
     { "DebugLevel",     2,  0,  8 },
-    { "TxCapacity",     1024,   16, 1024 },
-    { "RxCapacity",     256, 32, 1024 },
+#if PARANDIS_SUPPORT_RSC
+    { "TxCapacity",     1024, 16, 1024 },
+    { "RxCapacity",     1024, 32, 1024 },
+#else
+    { "TxCapacity",     1024, 16, 8192 },
+    { "RxCapacity",     8192, 32, 8192 },
+#endif
     { "Offload.TxChecksum", 0, 0, 31},
     { "Offload.TxLSO",  0, 0, 2},
     { "Offload.RxCS",   0, 0, 31},
@@ -282,7 +287,6 @@ static void ReadNicConfiguration(PARANDIS_ADAPTER *pContext, PUCHAR pNewMACAddre
             pContext->InitialOffloadParameters.LsoV2IPv6 = (UCHAR)pConfiguration->stdLsoV2ip6.ulValue;
             pContext->ulPriorityVlanSetting = pConfiguration->PriorityVlanTagging.ulValue;
             pContext->VlanId = pConfiguration->VlanId.ulValue & 0xfff;
-            if (pContext->VlanId > MAX_VLAN_ID) DPrintf(0, ("Warning: The provided Vlan id (%lu) is bigger than the maximal vlan limit (%d)\n", pContext->VlanId, MAX_VLAN_ID));
             pContext->MaxPacketSize.nMaxDataSize = pConfiguration->MTU.ulValue;
 #if PARANDIS_SUPPORT_RSS
             pContext->bRSSOffloadSupported = pConfiguration->RSSOffloadSupported.ulValue ? TRUE : FALSE;
@@ -441,13 +445,19 @@ static void PrintStatistics(PARANDIS_ADAPTER *pContext)
     DPrintf(0, ("[Diag!] Bytes transmitted %I64u, received %I64u\n",
         pContext->Statistics.ifHCOutOctets,
         pContext->Statistics.ifHCInOctets));
-    DPrintf(0, ("[Diag!] Tx frames %I64u, CSO %d, LSO %d\n",
+    DPrintf(0, ("[Diag!] Tx frames %I64u, CSO %d, LSO %d, indirect %d\n",
         totalTxFrames,
         pContext->extraStatistics.framesCSOffload,
-        pContext->extraStatistics.framesLSO));
+        pContext->extraStatistics.framesLSO,
+        pContext->extraStatistics.framesIndirect));
     DPrintf(0, ("[Diag!] Rx frames %I64u, Rx.Pri %d, RxHwCS.OK %d, FiltOut %d\n",
         totalRxFrames, pContext->extraStatistics.framesRxPriority,
         pContext->extraStatistics.framesRxCSHwOK, pContext->extraStatistics.framesFilteredOut));
+    if (pContext->extraStatistics.framesRxCSHwMissedBad || pContext->extraStatistics.framesRxCSHwMissedGood)
+    {
+        DPrintf(0, ("[Diag!] RxHwCS mistakes: missed bad %d, missed good %d\n",
+            pContext->extraStatistics.framesRxCSHwMissedBad, pContext->extraStatistics.framesRxCSHwMissedGood));
+    }
 }
 
 static
@@ -692,8 +702,15 @@ NDIS_STATUS ParaNdis_InitializeContext(
         }
 
         InitializeMAC(pContext, CurrentMAC);
+        // On 2012, we are posting large buffer (64k + header) size. MRG_RXBUF
+        // is not useful here. We might consider to turning it back on. If we
+        // start to post smaller 4k buffer in the future, we will turn it back
+        // on.
+        pContext->bUseMergedBuffers = false;
+// #if PARANDIS_SUPPORT_RSC
+//         pContext->bUseMergedBuffers = AckFeature(pContext, VIRTIO_NET_F_MRG_RXBUF);
+// #endif
 
-        pContext->bUseMergedBuffers = AckFeature(pContext, VIRTIO_NET_F_MRG_RXBUF);
         pContext->nVirtioHeaderSize = (pContext->bUseMergedBuffers) ? sizeof(virtio_net_hdr_mrg_rxbuf) : sizeof(virtio_net_hdr);
         pContext->bDoPublishIndices = AckFeature(pContext, VIRTIO_RING_F_EVENT_IDX);
     }
@@ -750,7 +767,7 @@ NDIS_STATUS ParaNdis_InitializeContext(
 #if PARANDIS_SUPPORT_RSC
         if (pContext->RSC.bIPv4SupportedQEMU || pContext->RSC.bIPv6SupportedQEMU)
         {
-            // User virtio_net_hdr_v1 if RSC is implemented in QEMU
+            // User virtio_net_hdr_v1 if RSC is implimented in QEMU
             pContext->nVirtioHeaderSize = sizeof(virtio_net_hdr_rsc);
         }
         else
@@ -783,13 +800,9 @@ NDIS_STATUS ParaNdis_InitializeContext(
 
 void ParaNdis_FreeRxBufferDescriptor(PARANDIS_ADAPTER *pContext, pRxNetDescriptor p)
 {
-    ULONG i;
-
     ParaNdis_UnbindRxBufferFromPacket(p);
-    for(i = 0; i < p->BufferSGLength; i++)
-    {
-        ParaNdis_FreePhysicalMemory(pContext, &p->PhysicalPages[i]);
-    }
+    // p->PhysicalPages are allocated from a common buffer and should not be freed.
+    // See CParaNdisRX::InitialAllocatePhysicalMemory.
 
     if(p->BufferSGArray) NdisFreeMemory(p->BufferSGArray, 0, 0);
     if(p->PhysicalPages) NdisFreeMemory(p->PhysicalPages, 0, 0);
@@ -949,7 +962,7 @@ NDIS_STATUS ParaNdis_SetupRSSQueueMap(PARANDIS_ADAPTER *pContext)
     if (!pContext->RSS2QueueLength)
     {
         pContext->RSS2QueueLength = USHORT(rssTableSize);
-        pContext->RSS2QueueMap = (CPUPathBundle **)NdisAllocateMemoryWithTagPriority(pContext->MiniportHandle, rssTableSize * sizeof(*pContext->RSS2QueueMap),
+        pContext->RSS2QueueMap = (CPUPathesBundle **)NdisAllocateMemoryWithTagPriority(pContext->MiniportHandle, rssTableSize * sizeof(*pContext->RSS2QueueMap),
             PARANDIS_MEMORY_TAG, NormalPoolPriority);
         if (pContext->RSS2QueueMap == nullptr)
         {
@@ -1030,7 +1043,7 @@ static NDIS_STATUS ParaNdis_VirtIONetInit(PARANDIS_ADAPTER *pContext)
 
     }
 
-    pContext->pPathBundles = (CPUPathBundle *)NdisAllocateMemoryWithTagPriority(pContext->MiniportHandle, pContext->nPathBundles * sizeof(*pContext->pPathBundles),
+    pContext->pPathBundles = (CPUPathesBundle *)NdisAllocateMemoryWithTagPriority(pContext->MiniportHandle, pContext->nPathBundles * sizeof(*pContext->pPathBundles),
         PARANDIS_MEMORY_TAG, NormalPoolPriority);
     if (pContext->pPathBundles == nullptr)
     {
@@ -1040,7 +1053,7 @@ static NDIS_STATUS ParaNdis_VirtIONetInit(PARANDIS_ADAPTER *pContext)
 
     for (i = 0; i < pContext->nPathBundles; i++)
     {
-        new (pContext->pPathBundles + i) CPUPathBundle();
+        new (pContext->pPathBundles + i) CPUPathesBundle();
     }
 
     for (i = 0; i < pContext->nPathBundles; i++)
@@ -1106,7 +1119,7 @@ void ParaNdis_DeviceConfigureRSC(PARANDIS_ADAPTER *pContext)
         ((pContext->RSC.bIPv4EnabledQEMU) ? ((UINT64)1 << VIRTIO_NET_F_GUEST_RSC4) : 0) |
         ((pContext->RSC.bIPv6EnabledQEMU) ? ((UINT64)1 << VIRTIO_NET_F_GUEST_RSC6) : 0);
 
-    DPrintf(0, ("Updating offload settings with %I64x", GuestOffloads));
+    DPrintf(0, ("Updateing offload settings with %I64x", GuestOffloads));
 
     ParaNdis_UpdateGuestOffloads(pContext, GuestOffloads);
 #else
@@ -1114,15 +1127,15 @@ UNREFERENCED_PARAMETER(pContext);
 #endif /* PARANDIS_SUPPORT_RSC */
 }
 
-NDIS_STATUS ParaNdis_DeviceConfigureMultiQueue(PARANDIS_ADAPTER *pContext)
+NDIS_STATUS ParaNdis_DeviceConfigureMultiqQueue(PARANDIS_ADAPTER *pContext)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     DEBUG_ENTRY(0);
 
     if (pContext->nPathBundles > 1)
     {
-        u16 nPaths = u16(pContext->nPathBundles);
-        if (!pContext->CXPath.SendControlMessage(VIRTIO_NET_CTRL_MQ, VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET, &nPaths, sizeof(nPaths), NULL, 0, 2))
+        u16 nPathes = (u16)pContext->nPathBundles;
+        if (!pContext->CXPath.SendControlMessage(VIRTIO_NET_CTRL_MQ, VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET, &nPathes, sizeof(nPathes), NULL, 0, 2))
         {
             DPrintf(0, ("[%s] - Sending MQ control message failed\n", __FUNCTION__));
             status = NDIS_STATUS_DEVICE_FAILED;
@@ -1131,16 +1144,6 @@ NDIS_STATUS ParaNdis_DeviceConfigureMultiQueue(PARANDIS_ADAPTER *pContext)
 
     DEBUG_EXIT_STATUS(0, status);
     return status;
-}
-
-static VOID
-ParaNdis_KickRX(PARANDIS_ADAPTER *pContext)
-{
-    UINT i;
-    for (i = 0; i < pContext->nPathBundles; i++)
-    {
-        pContext->pPathBundles[i].rxPath.KickRXRing();
-    }
 }
 
 NDIS_STATUS ParaNdis_DeviceEnterD0(PARANDIS_ADAPTER *pContext)
@@ -1152,10 +1155,9 @@ NDIS_STATUS ParaNdis_DeviceEnterD0(PARANDIS_ADAPTER *pContext)
     pContext->bEnableInterruptHandlingDPC = TRUE;
     ParaNdis_SynchronizeLinkState(pContext);
     ParaNdis_AddDriverOKStatus(pContext);
-    ParaNdis_DeviceConfigureMultiQueue(pContext);
+    ParaNdis_DeviceConfigureMultiqQueue(pContext);
     ParaNdis_DeviceConfigureRSC(pContext);
     ParaNdis_UpdateMAC(pContext);
-    ParaNdis_KickRX(pContext);
 
     DEBUG_EXIT_STATUS(0, status);
     return status;
@@ -1341,7 +1343,7 @@ VOID ParaNdis_CleanupContext(PARANDIS_ADAPTER *pContext)
 
         for (i = 0; i < pContext->nPathBundles; i++)
         {
-            pContext->pPathBundles[i].~CPUPathBundle();
+            pContext->pPathBundles[i].~CPUPathesBundle();
         }
         NdisFreeMemoryWithTagPriority(pContext->MiniportHandle, pContext->pPathBundles, PARANDIS_MEMORY_TAG);
         pContext->pPathBundles = nullptr;
@@ -1430,7 +1432,7 @@ static ULONG ShallPassPacket(PARANDIS_ADAPTER *pContext, PNET_PACKET_INFO pPacke
     return FALSE;
 }
 
-BOOLEAN ParaNdis_PerformPacketAnalysis(
+BOOLEAN ParaNdis_PerformPacketAnalyzis(
 #if PARANDIS_SUPPORT_RSS
                             PPARANDIS_RSS_PARAMS RSSParameters,
 #endif
@@ -1630,11 +1632,11 @@ OS's upper layer and stops indicating when nPacketsToIndicate drops to zero.
 When nPacketsToIndicate reaches zero, the loop operates in the following way:
 ProcessRxRing fetches the ready-to-process packet from virtqueue and places
 them into receiving queues, but the packets are not indicated by
-ProcessReceiveQueue; OS has no packets to be reinserted into the virtqueue,
+ProcessReceiveQueue; OS has no packets to be reinserted into the virtuqeue,
 virtqueue eventually becomes empty and RxDPCWorkBody's loop exits  */
 
 static
-BOOLEAN RxDPCWorkBody(PARANDIS_ADAPTER *pContext, CPUPathBundle *pathBundle, ULONG nPacketsToIndicate)
+BOOLEAN RxDPCWorkBody(PARANDIS_ADAPTER *pContext, CPUPathesBundle *pathBundle, ULONG nPacketsToIndicate)
 {
     BOOLEAN res = FALSE;
     bool rxPathOwner = false;
@@ -1722,7 +1724,7 @@ bool ParaNdis_DPCWorkBody(PARANDIS_ADAPTER *pContext, ULONG ulMaxPacketsToIndica
 
     InterlockedIncrement(&pContext->counterDPCInside);
 
-    CPUPathBundle *pathBundle = nullptr;
+    CPUPathesBundle *pathBundle = nullptr;
 
     if (pContext->nPathBundles == 1)
     {
@@ -1730,10 +1732,10 @@ bool ParaNdis_DPCWorkBody(PARANDIS_ADAPTER *pContext, ULONG ulMaxPacketsToIndica
     }
     else
     {
-        ULONG procIndex = ParaNdis_GetCurrentCPUIndex();
-        if (procIndex < pContext->nPathBundles)
+        ULONG procNumber = KeGetCurrentProcessorNumber();
+        if (procNumber < pContext->nPathBundles)
         {
-            pathBundle = pContext->pPathBundles + procIndex;
+            pathBundle = pContext->pPathBundles + procNumber;
         }
     }
     /* When DPC is scheduled for RSS processing, it may be assigned to CPU that has no

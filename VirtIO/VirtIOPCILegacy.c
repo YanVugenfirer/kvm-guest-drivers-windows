@@ -16,11 +16,11 @@
  */
 #include "osdep.h"
 #include "virtio_pci.h"
-#include "virtio.h"
+#include "VirtIO.h"
 #include "kdebugprint.h"
 #include "virtio_ring.h"
 #include "virtio_pci_common.h"
-#include "windows\virtio_ring_allocation.h"
+#include "windows/virtio_ring_allocation.h"
 
 #ifdef WPP_EVENT_TRACING
 #include "VirtIOPCILegacy.tmh"
@@ -133,10 +133,10 @@ static u16 vio_legacy_set_queue_vector(struct virtqueue *vq, u16 vector)
 static NTSTATUS vio_legacy_query_vq_alloc(VirtIODevice *vdev,
                                           unsigned index,
                                           unsigned short *pNumEntries,
-                                          unsigned long *pRingSize,
-                                          unsigned long *pHeapSize)
+                                          ULONG *pRingSize,
+                                          ULONG *pHeapSize)
 {
-    unsigned long ring_size, data_size;
+    ULONG ring_size, data_size;
     u16 num;
 
     /* Select the queue we're interested in */
@@ -158,6 +158,29 @@ static NTSTATUS vio_legacy_query_vq_alloc(VirtIODevice *vdev,
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS vio_legacy_set_vq_alloc(VirtIODevice *vdev,
+                                        unsigned index,
+                                        unsigned short numEntries)
+{
+    u16 num;
+    if (numEntries & (numEntries - 1)) {
+        DPrintf(0, ("%p: bad queue size %u", vdev, numEntries));
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    /* Select the queue we're interested in */
+    iowrite16(vdev, (u16)index, vdev->addr + VIRTIO_PCI_QUEUE_SEL);
+
+    /* Check if queue is either not available or already active. */
+    num = ioread16(vdev, vdev->addr + VIRTIO_PCI_QUEUE_NUM);
+    if (!num || ioread32(vdev, vdev->addr + VIRTIO_PCI_QUEUE_PFN)) {
+        return STATUS_NOT_FOUND;
+    }
+
+    iowrite16(vdev, numEntries, vdev->addr + VIRTIO_PCI_QUEUE_NUM);
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS vio_legacy_setup_vq(struct virtqueue **queue,
                                     VirtIODevice *vdev,
                                     VirtIOQueueInfo *info,
@@ -165,7 +188,7 @@ static NTSTATUS vio_legacy_setup_vq(struct virtqueue **queue,
                                     u16 msix_vec)
 {
     struct virtqueue *vq;
-    unsigned long ring_size, heap_size;
+    ULONG ring_size, heap_size;
     NTSTATUS status;
 
     /* Select the queue and query allocation parameters */
@@ -247,6 +270,7 @@ static const struct virtio_device_ops virtio_pci_device_ops = {
     .query_queue_alloc = vio_legacy_query_vq_alloc,
     .setup_queue = vio_legacy_setup_vq,
     .delete_queue = vio_legacy_del_vq,
+    .set_queue_alloc = vio_legacy_set_vq_alloc,
 };
 
 /* Legacy device initialization */

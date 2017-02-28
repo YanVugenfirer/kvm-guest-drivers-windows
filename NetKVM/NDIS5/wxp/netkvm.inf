@@ -53,9 +53,9 @@ HKR, Ndi\Interfaces,              UpperRange,          0, "ndis5"
 HKR, Ndi\Interfaces,              LowerRange,          0, "ethernet"
 
 [Parameters]
-#define INCLUDE_PARAMS
-#include "Common\common.inf.h"
-#undef INCLUDE_PARAMS
+;postbuild; #define INCLUDE_PARAMS
+;postbuild; #include "Common\common.inf.h"
+;postbuild; #undef INCLUDE_PARAMS
 
 [kvmnet5.CopyFiles]
 netkvm.sys,,,2
@@ -93,7 +93,7 @@ RedHat            = "Red Hat, Inc."
 kvmnet5.DeviceDesc   = "Red Hat VirtIO Ethernet Adapter"
 kvmnet5.Service.DispName  = "Red Hat VirtIO Ethernet Adapter Service"
 DiskId1 = "Red Hat VirtIO Ethernet Adapter Driver Disk #1"
-#define INCLUDE_STRINGS
-#include "Common\common.inf.h"
-#undef INCLUDE_STRINGS
+;postbuild; #define INCLUDE_STRINGS
+;postbuild; #include "Common\common.inf.h"
+;postbuild; #undef INCLUDE_STRINGS
 

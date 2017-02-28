@@ -97,7 +97,7 @@ typedef struct _tagPARANDIS_RECEIVE_QUEUE
 
 #include "ParaNdis-VirtIO.h"
 
-struct CPUPathBundle : public CPlacementAllocatable {
+struct CPUPathesBundle : public CPlacementAllocatable {
     CParaNdisRX rxPath;
     bool        rxCreated = false;
 
@@ -313,7 +313,7 @@ struct _tagRxNetDescriptor {
 #define PARANDIS_FIRST_RX_DATA_PAGE   (1)
     struct VirtIOBufferDescriptor *BufferSGArray;
     tCompletePhysicalAddress      *PhysicalPages;
-    ULONG                          BufferSGLength;
+    ULONG                          PagesAllocated;
     tCompletePhysicalAddress       IndirectArea;
     tPacketHolderType              Holder;
 
@@ -384,11 +384,12 @@ typedef struct _tagPARANDIS_ADAPTER
     {
         ULONG framesCSOffload;
         ULONG framesLSO;
+        ULONG framesIndirect;
         ULONG framesRxPriority;
         ULONG framesRxCSHwOK;
+        ULONG framesRxCSHwMissedBad;
+        ULONG framesRxCSHwMissedGood;
         ULONG framesFilteredOut;
-        ULONG framesCoalescedHost;
-        ULONG framesCoalescedWindows;
     } extraStatistics;
 
     /* initial number of free Tx descriptor(from cfg) - max number of available Tx descriptors */
@@ -412,10 +413,10 @@ typedef struct _tagPARANDIS_ADAPTER
     BOOLEAN bCXPathAllocated;
     BOOLEAN bCXPathCreated;
 
-    CPUPathBundle               *pPathBundles;
+    CPUPathesBundle             *pPathBundles;
     UINT                        nPathBundles;
 
-    CPUPathBundle              **RSS2QueueMap;
+    CPUPathesBundle            **RSS2QueueMap;
     USHORT                      RSS2QueueLength;
 
     PIO_INTERRUPT_MESSAGE_INFO  pMSIXInfoTable;
@@ -520,7 +521,7 @@ void ParaNdis_FreeRxBufferDescriptor(
     PARANDIS_ADAPTER *pContext,
     pRxNetDescriptor p);
 
-BOOLEAN ParaNdis_PerformPacketAnalysis(
+BOOLEAN ParaNdis_PerformPacketAnalyzis(
 #if PARANDIS_SUPPORT_RSS
     PPARANDIS_RSS_PARAMS RSSParameters,
 #endif
@@ -674,8 +675,13 @@ typedef struct _tagPhysicalAddressAllocationContext
 
 BOOLEAN ParaNdis_InitialAllocatePhysicalMemory(
     PARANDIS_ADAPTER *pContext,
-    ULONG ulSize,
     tCompletePhysicalAddress *pAddresses);
+
+BOOLEAN ParaNdis_RuntimeRequestToAllocatePhysicalMemory(
+    PARANDIS_ADAPTER *pContext,
+    tCompletePhysicalAddress *pAddresses,
+    tOnAdditionalPhysicalMemoryAllocated Callback
+    );
 
 VOID ParaNdis_FreePhysicalMemory(
     PARANDIS_ADAPTER *pContext,

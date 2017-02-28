@@ -1,5 +1,5 @@
-#ifndef NOTIFIER_H
-#define NOTIFIER_H
+#ifndef NOTIFYER_H
+#define NOTIFYER_H
 
 #include <basetyps.h>
 #include <stdlib.h>

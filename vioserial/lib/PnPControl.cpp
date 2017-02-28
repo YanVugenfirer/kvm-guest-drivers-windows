@@ -100,7 +100,7 @@ void PnPControl::Init( )
 
     if ( !InitializeCriticalSectionAndSpinCount(&PortsCS, 0x4000))
     {
-        printf("Cannot initialize critical section Error = %d.\n", GetLastError());
+        printf("Cannot initalize critical section Error = %d.\n", GetLastError());
     }
 
 }
@@ -317,9 +317,7 @@ void PnPControl::AddPort(const wchar_t* name)
 {
     printf ("Add Port %ws\n", name);
     EnterCriticalSection(&PortsCS);
-    SerialPort* port = new SerialPort(name, this);
-    port->AddRef();
-    Ports.push_back(port);
+    Ports.push_back(new SerialPort(name, this));
     LeaveCriticalSection(&PortsCS);
 }
 
@@ -331,7 +329,7 @@ void PnPControl::RemovePort(wchar_t* name)
     {
         if (_wcsnicmp((*it)->Name.c_str(), name, (*it)->Name.size()) == 0)
         {
-            ((SerialPort*)(*it))->Release();
+            delete *it;
             Ports.remove(*it);
             break;
         }
@@ -364,11 +362,9 @@ PVOID PnPControl::OpenPortByName(const wchar_t* name)
     {
         if (_wcsnicmp((*it)->SymbolicName.c_str(), name, (*it)->Name.size()) == 0)
         {
-            SerialPort* port = (SerialPort*)(*it);
-            if (port->OpenPort() == TRUE)
+            if(((SerialPort*)(*it))->OpenPort() == TRUE)
             {
-                port->AddRef();
-                ret = port;
+                ret = *it;
                 break;
             }
         }
@@ -378,18 +374,17 @@ PVOID PnPControl::OpenPortByName(const wchar_t* name)
 }
 PVOID PnPControl::OpenPortById(UINT id)
 {
+    if ((size_t)(id) > NumPorts())
+    {
+        return NULL;
+    }
     PVOID ret = NULL;
     EnterCriticalSection(&PortsCS);
-    if ((size_t)(id) < NumPorts())
+    Iterator it = Ports.begin();
+    advance(it, id);
+    if (((SerialPort*)(*it))->OpenPort() == TRUE)
     {
-        Iterator it = Ports.begin();
-        advance(it, id);
-        SerialPort* port = (SerialPort*)(*it);
-        if (port->OpenPort() == TRUE)
-        {
-            port->AddRef();
-            ret = port;
-        }
+        ret = *it;
     }
     LeaveCriticalSection(&PortsCS);
     return ret;
@@ -429,9 +424,7 @@ VOID PnPControl::ClosePort(PVOID port)
     {
         if (*it == port)
         {
-            SerialPort* port = (SerialPort*)(*it);
-            port->ClosePort();
-            port->Release();
+            ((SerialPort*)(*it))->ClosePort();
             break;
         }
     }
@@ -440,16 +433,14 @@ VOID PnPControl::ClosePort(PVOID port)
 
 wchar_t* PnPControl::PortSymbolicName(int index)
 {
-    wchar_t* ret = NULL;
-    EnterCriticalSection(&PortsCS);
-    if ((size_t)(index) < NumPorts())
+    if ((size_t)(index) > NumPorts())
     {
-        Iterator it = Ports.begin();
-        advance(it, index);
-        ret = (wchar_t*)((*it)->SymbolicName.c_str());
+        return NULL;
     }
-    LeaveCriticalSection(&PortsCS);
-    return ret;
+    EnterCriticalSection(&PortsCS);
+    Iterator it = Ports.begin();
+    advance(it, index);
+    return (wchar_t*)((*it)->SymbolicName.c_str());
 }
 
 VOID PnPControl::RegisterNotification(PVOID port, VIOSERIALNOTIFYCALLBACK pfn, PVOID ptr)
